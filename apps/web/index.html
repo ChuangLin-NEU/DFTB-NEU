@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DFTB-NEU 工作台</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <meta http-equiv="Pragma" content="no-cache" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260803aa" />
+  <script src="/static/vendor/3Dmol-min.js"></script>
+</head>
+<body>
+  <!-- 独立登录门禁：不在主导航内 -->
+  <div id="gate" class="gate" hidden>
+    <div class="gate-panel">
+      <div class="gate-brand">
+        <div class="brand-mark" aria-hidden="true">D+</div>
+        <div>
+          <div class="brand">DFTB-NEU 工作台</div>
+          <div class="brand-sub">DFTB+ · Local Workspace</div>
+        </div>
+      </div>
+      <h1 class="gate-title">登录</h1>
+      <p class="gate-desc">学号与教师公布的本堂密码</p>
+      <form id="enter-form" class="gate-form" autocomplete="on">
+        <label>学号
+          <input id="student-id" type="text" autocomplete="username" />
+        </label>
+        <label>本堂密码
+          <input id="class-code" type="password" autocomplete="current-password" />
+        </label>
+        <button type="submit" id="btn-enter" class="btn btn-primary btn-block">进入工作台</button>
+        <div id="enter-msg" class="enter-alert" hidden role="alert"></div>
+      </form>
+      <p class="affil">东北大学 · 材料科学与工程学院 · 张林教授课题组</p>
+    </div>
+  </div>
+
+  <div id="app" class="shell" hidden>
+    <header class="topbar">
+      <div class="brand-block">
+        <div class="brand-mark" aria-hidden="true">D+</div>
+        <div>
+          <div class="brand">DFTB-NEU 工作台</div>
+          <div class="brand-sub">Local DFTB+ with AI</div>
+        </div>
+      </div>
+      <nav class="nav-primary" aria-label="主导航">
+        <button type="button" data-tab="home" class="active">首页</button>
+        <button type="button" data-tab="chat">计算</button>
+        <button type="button" data-tab="projects">任务</button>
+        <button type="button" data-tab="courses">课程</button>
+        <button type="button" data-tab="deploy">环境</button>
+        <button type="button" data-tab="settings">设置</button>
+      </nav>
+      <div class="topbar-right">
+        <div id="status-pill" class="status-pill" aria-live="polite">
+          <span class="status-item" id="status-login"><span class="status-dot"></span><span class="status-label">检测中</span></span>
+          <button type="button" class="status-item status-jump" id="status-llm" title="前往 DeepSeek API 设置">
+            <span class="status-dot"></span><span class="status-label">AI</span>
+          </button>
+          <button type="button" class="status-item status-jump" id="status-soft" title="前往 DFTB+ 环境部署">
+            <span class="status-dot"></span><span class="status-label">环境</span>
+          </button>
+        </div>
+        <button type="button" id="btn-logout" class="btn btn-quiet" title="退出登录">退出</button>
+      </div>
+    </header>
+
+    <main>
+      <section id="tab-home" class="panel panel-home active">
+        <div class="home-hero" style="--home-hero: url('/static/home-hero-dftb.png')">
+          <div class="home-hero-veil" aria-hidden="true"></div>
+          <div class="home-hero-inner">
+            <p class="home-brand">DFTB-NEU 工作台</p>
+            <h1 class="home-headline">用一句话完成固体计算</h1>
+            <p class="home-lead">从结构到多性质计算，自然语言编排，在本机 DFTB+ 上跑通。</p>
+            <form id="home-nl-form" class="home-nl" autocomplete="off">
+              <label class="sr-only" for="home-nl-input">自然语言计算指令</label>
+              <textarea id="home-nl-input" rows="3" placeholder="例：用 DFTB+ 计算硅晶体能带与态密度，并做 SCC 自洽"></textarea>
+              <div class="home-nl-demos" aria-label="举例">
+                <span class="home-nl-demos-label">举例</span>
+                <button type="button" class="home-demo" data-prompt="用 DFTB+ 计算硅晶体能带和 DOS">硅 · 能带/DOS</button>
+                <button type="button" class="home-demo" data-prompt="用 DFTB+ 计算石墨烯能带结构">石墨烯 · 能带</button>
+                <button type="button" class="home-demo" data-prompt="用 DFTB+ 对水分子做几何优化">水 · 几何优化</button>
+                <button type="button" class="home-demo" data-prompt="用 DFTB+ Casida 线性响应计算苯分子（C6H6）吸收光谱">苯 · 吸收光谱</button>
+                <button type="button" class="home-demo" data-prompt="用 DFTB+ 跑氨分子（NH3）短程 BOMD">氨 · BOMD</button>
+              </div>
+              <div class="home-nl-actions">
+                <button type="submit" id="btn-home-nl" class="btn btn-primary">开始计算</button>
+                <button type="button" id="btn-home-to-chat" class="btn btn-ghost home-ghost">打开完整计算台</button>
+                <button type="button" id="btn-home-guide" class="btn btn-ghost home-ghost">快速上手指南</button>
+              </div>
+            </form>
+          </div>
+        </div>
+
+        <div id="home-guide" class="home-guide" hidden>
+          <div class="home-guide-head">
+            <div>
+              <h2>快速上手指南</h2>
+              <p>DFTB 简介 · DFTB+ 使用要点 · 本软件操作路径</p>
+            </div>
+            <button type="button" id="btn-home-guide-close" class="btn btn-ghost">收起</button>
+          </div>
+
+          <details class="guide-block">
+            <summary>一、什么是 DFTB</summary>
+            <div class="guide-body">
+              <p class="guide-lead">DFTB（Density Functional Tight Binding）是一种基于密度泛函理论参数化的紧束缚方法：在保留量子力学图像的同时，用预先拟合的积分表大幅降低计算量，适合固体物理教学、较大体系与高通量初筛。</p>
+              <ul class="guide-steps" style="list-style:disc;padding-left:1.2em">
+                <li>相对全电子 / 平面波 DFT：速度快、参数依赖明确，适合课堂演示与趋势分析。</li>
+                <li>常见任务：SCC 单点、几何优化、能带与态密度、分子激发（Casida）、短程分子动力学等。</li>
+                <li>结果质量取决于 SK 参数集（如 3ob、pbc）与几何/k 点设置是否合理。</li>
+              </ul>
+            </div>
+          </details>
+
+          <details class="guide-block">
+            <summary>二、DFTB+ 怎么用</summary>
+            <div class="guide-body">
+              <p class="guide-lead">DFTB+ 是开源 DFTB 引擎。一次计算通常需要：结构文件（GEN / POSCAR）+ 输入脚本（HSD）+ 对应元素的 Slater–Koster 参数。</p>
+              <ol class="guide-steps">
+                <li><strong>Geometry</strong>：给出原子坐标与边界条件（分子簇或周期晶体）。</li>
+                <li><strong>Hamiltonian</strong>：选择 DFTB/xTB、是否 SCC、k 点网格、填充温度等。</li>
+                <li><strong>Driver</strong>：单点、几何优化、分子动力学等。</li>
+                <li><strong>Analysis</strong>：能带路径（Klines）、态密度、激发态（Casida）等后处理块。</li>
+                <li>运行 <code>dftb+</code> 后，从 <code>detailed.out</code>、<code>band.out</code>、<code>EXC.DAT</code> 等读取结果并绘图。</li>
+              </ol>
+              <p class="guide-lead">本软件会根据自然语言自动生成输入文件（HSD），并在本机 WSL 隔离环境中调用 DFTB+；生成后可直接编辑，再确认计算。</p>
+            </div>
+          </details>
+
+          <details class="guide-block">
+            <summary>三、本软件怎么用</summary>
+            <div class="guide-body">
+              <ol class="guide-steps">
+                <li><strong>登录</strong>：学号 + 教师公布的本堂密码。</li>
+                <li><strong>环境</strong>：打开「环境」页，完成 WSL2 / DFTB+ 部署与测试校验（仅首次或更换电脑）。</li>
+                <li><strong>计算</strong>：在首页或「计算」页用一句话描述任务；可点「举例」填充。周期体系可上传 POSCAR/GEN，或由 AI 自动获取结构。</li>
+                <li><strong>确认计算</strong>：输入指令后自动生成 HSD，核对结构与输入后点「确认计算」投到本机。</li>
+                <li><strong>任务</strong>：在「任务」页查看进度、能量/收敛、能带·DOS 等图件，以及本地性能评估。</li>
+                <li><strong>课程（可选）</strong>：固体物理课次可「一键复现」生成结构与输入，便于对照课堂内容。</li>
+              </ol>
+              <p class="guide-lead">推荐路径：首页输入 → 自动生成输入 → 确认计算 → 任务页看图。</p>
+            </div>
+          </details>
+        </div>
+
+        <div class="home-features">
+          <div class="home-features-head">
+            <span class="feat-ico feat-ico-core" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="20" height="20"><path fill="currentColor" d="M12 2.5 14.8 8l6.2.5-4.7 4 1.5 6-5.8-3.4L6.2 18.5l1.5-6L3 8.5 9.2 8z"/></svg>
+            </span>
+            <h2>核心能力</h2>
+          </div>
+          <p class="home-features-lead">一体化路径：课次结构、自然语言、本机部署计算，以及数据分析与绘图。</p>
+          <ul class="feature-rail">
+            <li>
+              <span class="feat-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 3.2a4.2 4.2 0 0 0-4.2 4.2v4a4.2 4.2 0 0 0 8.4 0v-4A4.2 4.2 0 0 0 12 3.2Zm-2.6 4.2a2.6 2.6 0 0 1 5.2 0v4a2.6 2.6 0 0 1-5.2 0v-4Zm-2.7 4.8h1.6a4.7 4.7 0 0 0 9.4 0h1.6a6.3 6.3 0 0 1-5.5 5.5v2.1h2.4V21H9.2v-1.2h2.4v-2.1a6.3 6.3 0 0 1-5-5.5Z"/></svg>
+              </span>
+              <strong>自然语言计算</strong>
+              <span>描述任务 → 生成输入文件 → 确认后在本机 DFTB+ 运行</span>
+            </li>
+            <li>
+              <span class="feat-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M6 3.5h9l4 4V20a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V4.5a1 1 0 0 1 1-1Zm8.5 1.2V8H19l-4.5-3.3ZM8 11h8v1.5H8V11Zm0 3.5h8V16H8v-1.5Zm0 3.5h5V19H8v-1Z"/></svg>
+              </span>
+              <strong>课程课次</strong>
+              <span>按固体物理课次载入结构与计算意图，更好理解课程</span>
+            </li>
+            <li>
+              <span class="feat-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M12 3.2 19 7v10l-7 3.8L5 17V7l7-3.8Zm0 2.2L7 7.8v8.4l5 2.7 5-2.7V7.8l-5-2.4Zm0 3.1a3.2 3.2 0 1 1 0 6.4 3.2 3.2 0 0 1 0-6.4Z"/></svg>
+              </span>
+              <strong>结构来源</strong>
+              <span>上传 POSCAR / GEN，或由 AI 从 Materials Project 数据库获取</span>
+            </li>
+            <li>
+              <span class="feat-ico" aria-hidden="true">
+                <svg viewBox="0 0 24 24" width="22" height="22"><path fill="currentColor" d="M4 18.5V5.5h1.6v13H4Zm3.2-1.2 3.2-3.6 2.4 1.9 5-5.5 1.1 1-6 6.6-2.4-1.9-2.2 2.5H7.2Z"/></svg>
+              </span>
+              <strong>任务与绘图</strong>
+              <span>跟踪作业进度，数据后处理分析与绘图</span>
+            </li>
+          </ul>
+        </div>
+        <p class="home-affil">东北大学 · 材料科学与工程学院 · 张林教授课题组</p>
+      </section>
+
+      <section id="tab-deploy" class="panel panel-page">
+        <header class="page-head">
+          <div>
+            <h1>计算环境</h1>
+            <p>WSL2 隔离安装 DFTB+ 与 SK 参数（<code>~/.dftb-neu</code>）</p>
+          </div>
+          <button type="button" id="btn-refresh-deploy" class="btn btn-ghost">刷新</button>
+        </header>
+        <div class="section">
+          <div id="deploy-checks" class="check-grid" aria-live="polite">
+            <div class="check-item" id="chk-wsl"><span class="dot">·</span><div><strong>WSL2</strong><p>检测中…</p></div></div>
+            <div class="check-item" id="chk-dftb"><span class="dot">·</span><div><strong>DFTB+</strong><p>检测中…</p></div></div>
+            <div class="check-item" id="chk-smoke"><span class="dot">·</span><div><strong>测试校验</strong><p>检测中…</p></div></div>
+          </div>
+          <p id="deploy-summary" class="callout">检测中…</p>
+          <div class="btn-row">
+            <button type="button" id="btn-deploy" class="btn btn-primary">部署到本机</button>
+          </div>
+          <details class="raw-details">
+            <summary>环境诊断详情</summary>
+            <pre id="deploy-diag" class="code soft"></pre>
+          </details>
+          <pre id="deploy-log" class="code"></pre>
+        </div>
+
+        <div class="section deploy-guide">
+          <div class="section-head">
+            <div>
+              <h2>部署教程</h2>
+              <p>一键部署与手动部署说明；网络较慢时建议改用国内镜像手动安装 Ubuntu。</p>
+            </div>
+          </div>
+
+          <details class="guide-block">
+            <summary>一键部署</summary>
+            <div class="guide-body">
+              <p class="guide-lead">部署内容：启用 WSL2（如需要）→ 安装 Ubuntu（如需要）→ 在用户目录安装 DFTB+ 与 SK 参数，并完成测试校验。安装位置：WSL 内 <code>~/.dftb-neu</code>。</p>
+              <ol class="guide-steps">
+                <li>打开「环境」页，点击 <strong>部署到本机</strong>。</li>
+                <li>若弹出管理员确认（UAC），选择「是」。</li>
+                <li>若出现黑色 <code>wsl.exe</code> 窗口下载 / 安装 Ubuntu，耐心等待（国内网络可能较慢）。</li>
+                <li>若提示创建 Unix 用户：
+                  <ul>
+                    <li>用户名须以<strong>小写字母或下划线</strong>开头，可含小写字母、数字、<code>_</code>、<code>-</code>。</li>
+                    <li>推荐：<code>neu123</code>（不要用 <code>123xxx</code> 这种以数字开头的名称）。</li>
+                    <li>密码输入两遍（输入时不显示字符，属正常）。</li>
+                    <li>出现类似 <code>xxx@DESKTOP-...:~$</code> 后可关闭该窗口。</li>
+                  </ul>
+                </li>
+                <li>若系统提示重启：重启后再次打开软件，进入「环境」，再点一次 <strong>部署到本机</strong>。</li>
+                <li>等待日志结束。三项状态应为：WSL2 就绪、DFTB+ 已安装、测试校验通过。</li>
+              </ol>
+              <table class="guide-table">
+                <thead><tr><th>现象</th><th>处理</th></tr></thead>
+                <tbody>
+                  <tr><td>下载 Ubuntu 卡在 0%</td><td>换网络，或按下方「手动部署」用国内镜像安装 Ubuntu</td></tr>
+                  <tr><td>Invalid username</td><td>用户名不能以数字开头，改用 <code>neu123</code></td></tr>
+                  <tr><td>取消了管理员确认</td><td>再点「部署到本机」并允许 UAC</td></tr>
+                  <tr><td>部署失败</td><td>查看本页日志；确认 <code>wsl -d Ubuntu</code> 可进入后再试</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </details>
+
+          <details class="guide-block">
+            <summary>手动部署</summary>
+            <div class="guide-body">
+              <p class="guide-lead">适用于一键下载 Ubuntu 很慢或失败的情况。先用国内镜像装好 Ubuntu，再回到本页完成 DFTB+ 安装。</p>
+
+              <h3>1. 启用 WSL（仅首次）</h3>
+              <p>以管理员身份打开 PowerShell，执行：</p>
+              <pre class="guide-code">wsl --install --no-distribution
+wsl --set-default-version 2</pre>
+              <p>若提示重启，请先重启电脑，再继续。</p>
+
+              <h3>2. 用国内镜像下载 Ubuntu 22.04 rootfs</h3>
+              <p>任选其一（约 325 MB，amd64）：</p>
+              <ul class="guide-links">
+                <li><a href="https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cloud-images/wsl/jammy/current/ubuntu-jammy-wsl-amd64-ubuntu22.04lts.rootfs.tar.gz" target="_blank" rel="noopener">清华大学镜像</a></li>
+                <li><a href="https://mirrors.ustc.edu.cn/ubuntu-cloud-images/wsl/jammy/current/ubuntu-jammy-wsl-amd64-ubuntu22.04lts.rootfs.tar.gz" target="_blank" rel="noopener">中科大镜像</a></li>
+              </ul>
+              <p>或在 PowerShell 中下载到「下载」文件夹：</p>
+              <pre class="guide-code">$url = "https://mirrors.tuna.tsinghua.edu.cn/ubuntu-cloud-images/wsl/jammy/current/ubuntu-jammy-wsl-amd64-ubuntu22.04lts.rootfs.tar.gz"
+$out = "$env:USERPROFILE\Downloads\ubuntu-jammy-wsl.rootfs.tar.gz"
+Invoke-WebRequest -Uri $url -OutFile $out</pre>
+
+              <h3>3. 导入为 WSL 发行版</h3>
+              <pre class="guide-code">$tar = "$env:USERPROFILE\Downloads\ubuntu-jammy-wsl.rootfs.tar.gz"
+$dir = "$env:LOCALAPPDATA\WSL\Ubuntu-22.04"
+New-Item -ItemType Directory -Force -Path $dir | Out-Null
+wsl --import Ubuntu-22.04 $dir $tar --version 2
+wsl --set-default Ubuntu-22.04</pre>
+
+              <h3>4. 创建日常用户（推荐）</h3>
+              <pre class="guide-code">wsl -d Ubuntu-22.04 -u root -- bash -lc "useradd -m -s /bin/bash neu123 && echo 'neu123:neu123' | chpasswd && usermod -aG sudo neu123 && echo -e '[user]\ndefault=neu123' > /etc/wsl.conf"
+wsl --terminate Ubuntu-22.04
+wsl -d Ubuntu-22.04 -e whoami</pre>
+              <p>最后一行应输出 <code>neu123</code>。可将密码改成自己的。</p>
+
+              <h3>5. 回到本软件完成 DFTB+</h3>
+              <ol class="guide-steps">
+                <li>本页点击 <strong>刷新</strong>，确认 WSL2 就绪。</li>
+                <li>再点 <strong>部署到本机</strong>（此时一般不再下载 Ubuntu，只安装 DFTB+ / SK / 测试校验）。</li>
+                <li>等待三项全部通过。</li>
+              </ol>
+
+              <h3>6. 可选核对</h3>
+              <pre class="guide-code">wsl -d Ubuntu-22.04 -e bash -lc "~/.dftb-neu/envs/dftbplus/bin/dftb+ --version"</pre>
+            </div>
+          </details>
+        </div>
+      </section>
+
+      <section id="tab-courses" class="panel panel-page">
+        <header class="page-head">
+          <div>
+            <h1>固体物理课程</h1>
+            <p>按国内主流教材主线编排：晶体结构 → 结合 → 振动 → 能带 → 二维与缺陷</p>
+          </div>
+        </header>
+        <div id="course-list" class="course-list"></div>
+      </section>
+
+      <section id="tab-chat" class="panel panel-page">
+        <header class="page-head">
+          <div>
+            <h1>计算</h1>
+            <p>用自然语言描述任务</p>
+          </div>
+          <button type="button" id="btn-clear-all" class="btn btn-ghost">清空</button>
+        </header>
+        <div class="chip-group section soft-section">
+          <p class="chip-label">固体 · 能带（硅 / 石墨烯）</p>
+          <div id="examples-solid" class="chip-row"></div>
+          <p class="chip-label">分子 · 优化 / 振动 / MD / 光谱 / xTB</p>
+          <div id="examples-research" class="chip-row"></div>
+        </div>
+        <div class="section chat-core">
+          <div class="section-head">
+            <div>
+              <h2>对话与指令</h2>
+              <p>输入自然语言后点「生成输入」；核对 HSD 与结构后再确认计算</p>
+            </div>
+          </div>
+          <div id="calc-progress" class="calc-progress" hidden>
+            <div class="calc-progress-track">
+              <div id="calc-progress-fill" class="calc-progress-fill"></div>
+            </div>
+            <ol id="calc-progress-steps" class="calc-steps">
+              <li data-step="parse">解析意图</li>
+              <li data-step="prepare">准备结构</li>
+              <li data-step="generate">生成输入</li>
+              <li data-step="ready">已就绪</li>
+            </ol>
+            <p id="calc-progress-text" class="calc-progress-text">准备中…</p>
+          </div>
+          <textarea id="chat-input" rows="4" placeholder="例：用 DFTB+ 计算硅晶体能带和 DOS"></textarea>
+          <div class="btn-row chat-nl-actions">
+            <button type="button" id="btn-nl-submit" class="btn btn-primary">生成输入</button>
+          </div>
+          <div id="chat-welcome" class="chat-welcome">
+            <strong>对话与结果将显示在这里</strong>
+          </div>
+          <div id="chat-log" class="chat-log" hidden></div>
+          <p class="hsd-hint">HSD 是 DFTB+ 的输入脚本。输入指令后会自动生成；可直接编辑，确认计算时按编辑后的内容投递。</p>
+          <div id="hsd-panel" class="hsd-panel" hidden>
+            <div class="hsd-panel-head">
+              <div>
+                <strong>DFTB+ 输入文件（HSD）</strong>
+                <span id="hsd-meta">可编辑后确认计算</span>
+              </div>
+              <div class="btn-row" style="margin:0">
+                <button type="button" id="btn-restore-hsd" class="btn btn-quiet" hidden>恢复推荐默认</button>
+              </div>
+            </div>
+            <div id="hsd-tips" class="hsd-tips" hidden></div>
+            <textarea id="hsd-preview" class="code hsd-code" spellcheck="false" rows="16" aria-label="可编辑的 HSD 输入"></textarea>
+          </div>
+        </div>
+        <div class="section">
+          <div class="section-head">
+            <div>
+              <h2>结构</h2>
+              <p>可选。上传 POSCAR / GEN，或由课程 / AI 获取</p>
+            </div>
+            <div class="btn-row" style="margin:0">
+              <label class="file-btn btn">上传结构<input type="file" id="struct-file" accept=".vasp,.poscar,.gen,.txt" hidden /></label>
+            </div>
+          </div>
+          <div id="struct-viewer-wrap" class="struct-viewer-wrap" hidden>
+            <div id="struct-viewer" class="struct-viewer"></div>
+            <p id="struct-viewer-caption" class="muted-inline"></p>
+          </div>
+          <label class="sr-only" for="struct-text">结构文本</label>
+          <textarea id="struct-text" rows="5" placeholder="POSCAR / GEN"></textarea>
+          <div class="btn-row struct-submit-row">
+            <button type="button" id="btn-submit" class="btn btn-primary" disabled>确认计算</button>
+          </div>
+          <div id="job-progress" class="job-progress" hidden>
+            <div class="job-progress-head">
+              <div>
+                <strong>作业进度</strong>
+                <span id="job-status-label">—</span>
+              </div>
+            </div>
+            <div id="job-status-chips" class="job-status-chips"></div>
+            <p id="job-progress-note" class="job-progress-note"></p>
+            <pre id="job-log" class="code soft job-log"></pre>
+          </div>
+        </div>
+      </section>
+
+      <section id="tab-projects" class="panel panel-page">
+        <header class="page-head">
+          <div>
+            <h1>任务</h1>
+            <p>跟踪作业进度，查看结果摘要与出图</p>
+          </div>
+        </header>
+        <ul id="project-list" class="project-list"></ul>
+        <div id="project-detail-host" hidden>
+        <div id="project-detail" class="section project-detail" hidden>
+          <div class="section-head project-detail-actions">
+            <div class="btn-row" style="margin:0">
+              <button type="button" id="btn-cancel-job" class="btn danger" hidden>取消任务</button>
+            </div>
+          </div>
+          <div id="task-io" class="task-io" hidden>
+            <div class="task-io-head">
+              <div>
+                <strong>输入 / 输出文件</strong>
+                <p id="io-browser-meta" class="muted-inline"></p>
+              </div>
+            </div>
+            <div class="io-browser-body task-io-body">
+              <aside class="io-file-list" id="io-file-list"></aside>
+              <section class="io-file-view">
+                <div class="io-file-toolbar">
+                  <strong id="io-file-name">—</strong>
+                  <span id="io-file-kind" class="io-kind-badge">—</span>
+                  <div class="btn-row" style="margin:0;margin-left:auto">
+                    <button type="button" class="btn btn-ghost btn-mini" id="io-file-prev">上一个</button>
+                    <button type="button" class="btn btn-ghost btn-mini" id="io-file-next">下一个</button>
+                    <button type="button" class="btn btn-primary btn-mini" id="io-file-download">下载</button>
+                  </div>
+                </div>
+                <pre id="io-file-text" class="code soft io-file-text"></pre>
+              </section>
+            </div>
+          </div>
+          <div id="task-live" class="task-live" hidden>
+            <div class="task-live-head">
+              <strong id="task-live-title">计算进度</strong>
+              <span id="task-live-status-btn" class="job-status-btn">—</span>
+            </div>
+            <div id="task-progress-bar" class="task-progress-bar" hidden>
+              <div id="task-progress-fill" class="task-progress-fill"></div>
+            </div>
+            <ol id="task-pipeline-steps" class="task-pipeline-steps" hidden></ol>
+            <p id="task-live-note" class="job-progress-note"></p>
+            <div id="task-diag" class="task-diag" hidden></div>
+            <pre id="task-live-log" class="code soft job-log"></pre>
+          </div>
+          <div id="task-struct-compare" class="task-struct-compare" hidden>
+            <div class="sub-label-row">
+              <h3 class="sub-label">结构对比</h3>
+              <p class="muted-inline" id="task-struct-compare-note">优化前 / 优化后</p>
+            </div>
+            <div class="task-struct-grid">
+              <div class="task-struct-pane">
+                <div class="task-struct-pane-label">优化前</div>
+                <div id="task-struct-before-wrap" class="struct-viewer-wrap task-struct-viewer-wrap">
+                  <div id="task-struct-before" class="struct-viewer"></div>
+                </div>
+              </div>
+              <div class="task-struct-pane">
+                <div class="task-struct-pane-label">优化后</div>
+                <div id="task-struct-after-wrap" class="struct-viewer-wrap task-struct-viewer-wrap">
+                  <div id="task-struct-after" class="struct-viewer"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div id="figs-block" class="figs-block" hidden>
+            <div class="sub-label-row">
+              <h3 class="sub-label">结果图</h3>
+              <div class="btn-row" style="margin:0">
+                <button type="button" id="btn-export-figs" class="btn btn-ghost btn-mini" hidden>导出图件</button>
+              </div>
+            </div>
+            <div id="fig-gallery" class="gallery"></div>
+          </div>
+          <div id="analysis-cards" class="metric-grid"></div>
+        </div>
+        </div>
+      </section>
+
+      <section id="tab-settings" class="panel panel-page">
+        <header class="page-head">
+          <div>
+            <h1>设置</h1>
+            <p>DeepSeek API 与软件界面配色</p>
+          </div>
+        </header>
+        <div class="section" id="settings-theme">
+          <h2>软件系统配色</h2>
+          <p class="muted-block">选择界面主色调，立即生效并保存在本机。</p>
+          <div class="theme-grid" role="radiogroup" aria-label="系统配色">
+            <button type="button" class="theme-card" data-palette="teal" aria-pressed="true">
+              <span class="theme-swatch teal"></span>
+              <strong>青绿</strong>
+              <span>默认</span>
+            </button>
+            <button type="button" class="theme-card" data-palette="ocean" aria-pressed="false">
+              <span class="theme-swatch ocean"></span>
+              <strong>青灰</strong>
+              <span>冷静</span>
+            </button>
+            <button type="button" class="theme-card" data-palette="ink" aria-pressed="false">
+              <span class="theme-swatch ink"></span>
+              <strong>墨色</strong>
+              <span>稳重</span>
+            </button>
+            <button type="button" class="theme-card" data-palette="sand" aria-pressed="false">
+              <span class="theme-swatch sand"></span>
+              <strong>暖砂</strong>
+              <span>柔和</span>
+            </button>
+          </div>
+        </div>
+        <div class="section" id="settings-llm">
+          <h2>DeepSeek API</h2>
+          <p class="muted-block">用于自然语言计算。</p>
+          <label>API Key
+            <input id="deepseek-key" type="password" autocomplete="off" placeholder="sk-…" />
+          </label>
+          <label>Base URL
+            <input id="deepseek-base" type="text" autocomplete="off" />
+          </label>
+          <label>模型
+            <input id="deepseek-model" type="text" autocomplete="off" />
+          </label>
+          <p id="deepseek-hint" class="muted-inline"></p>
+          <div class="btn-row">
+            <button type="button" id="btn-save-llm" class="btn btn-primary">保存并检测</button>
+          </div>
+          <pre id="settings-msg" class="code" hidden></pre>
+
+          <details class="guide-block settings-guide">
+            <summary>简要教程</summary>
+            <div class="guide-body">
+              <ol class="guide-steps">
+                <li>在 <a href="https://platform.deepseek.com/" target="_blank" rel="noopener">DeepSeek 开放平台</a> 创建 API Key，粘贴到上方「API Key」；Base URL / 模型一般保持默认即可。</li>
+                <li>点击 <strong>保存并检测</strong>；顶栏「AI」点亮为绿表示可用。</li>
+                <li>检测失败时：检查 Key 是否有效、本机能否访问 DeepSeek。</li>
+              </ol>
+            </div>
+          </details>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <div id="app-modal" class="app-modal" hidden>
+    <div class="app-modal-backdrop" data-modal-dismiss></div>
+    <div class="app-modal-card" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
+      <div class="app-modal-icon" id="app-modal-icon" aria-hidden="true">!</div>
+      <div class="app-modal-body">
+        <h3 id="app-modal-title">确认操作</h3>
+        <p id="app-modal-message"></p>
+        <p id="app-modal-hint" class="app-modal-hint" hidden></p>
+      </div>
+      <div class="app-modal-actions">
+        <button type="button" class="btn btn-ghost" id="app-modal-cancel" data-modal-dismiss>取消</button>
+        <button type="button" class="btn btn-primary" id="app-modal-ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="fig-lightbox" class="fig-lightbox" hidden>
+    <div class="fig-lightbox-backdrop" data-fig-dismiss></div>
+    <figure class="fig-lightbox-card">
+      <button type="button" class="fig-lightbox-close" data-fig-dismiss aria-label="关闭">×</button>
+      <img id="fig-lightbox-img" alt="" />
+      <figcaption id="fig-lightbox-cap"></figcaption>
+      <div class="fig-lightbox-actions">
+        <button type="button" class="btn btn-ghost" id="fig-lightbox-prev">上一张</button>
+        <button type="button" class="btn btn-primary" id="fig-lightbox-export">导出</button>
+        <button type="button" class="btn btn-ghost" id="fig-lightbox-next">下一张</button>
+      </div>
+    </figure>
+  </div>
+
+  <script src="/static/app.js?v=20260805f"></script>
+</body>
+</html>

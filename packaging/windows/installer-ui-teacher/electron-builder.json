@@ -1,0 +1,45 @@
+{
+  "appId": "org.dftbneu.teacher.setup",
+  "productName": "DFTB Neu Teacher Setup",
+  "copyright": "Copyright © DFTB Neu",
+  "electronVersion": "35.1.2",
+  "directories": {
+    "output": "../release/installer-build-teacher",
+    "buildResources": "."
+  },
+  "files": [
+    "main.cjs",
+    "preload.cjs",
+    "index.html",
+    "icon.png",
+    "icon.ico",
+    "package.json"
+  ],
+  "extraResources": [
+    {
+      "from": "../release/payload-teacher/app.zip",
+      "to": "payload/app.zip"
+    }
+  ],
+  "asar": true,
+  "electronFuses": {
+    "enableEmbeddedAsarIntegrityValidation": false,
+    "onlyLoadAppFromAsar": false
+  },
+  "win": {
+    "icon": "icon.ico",
+    "signExecutable": false,
+    "target": [
+      {
+        "target": "portable",
+        "arch": ["x64"]
+      }
+    ],
+    "artifactName": "DFTB_Neu_Teacher_Setup_${version}.${ext}"
+  },
+
+  "portable": {
+    "artifactName": "DFTB_Neu_Teacher_Setup_${version}.${ext}",
+    "requestExecutionLevel": "user"
+  }
+}

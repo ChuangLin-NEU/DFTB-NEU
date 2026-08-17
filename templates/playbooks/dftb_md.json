@@ -1,0 +1,39 @@
+{
+  "id": "dftb_md",
+  "name": "DFTB+ 分子动力学",
+  "category": "DFTB+",
+  "description": "DFTB+ Recipes 能力族流程（对照官网指南生成 dftb_in.hsd）。",
+  "example_note": "自然语言点名 DFTB+/紧束缚后匹配本流程",
+  "graph_type": "dftb_md",
+  "maturity": "assisted",
+  "method_defaults": {
+    "functional": "DFTB",
+    "encut": 0,
+    "kpoints": "1 1 1",
+    "ediff": "1E-5",
+    "ediffg": "-0.02",
+    "sk_set": "3ob"
+  },
+  "primary_engines": [
+    "dftbplus"
+  ],
+  "success_criteria": [
+    "作业收敛或按 Recipes 产出关键文件",
+    "结果可解析并出图"
+  ],
+  "expected_figures": [
+    "DFTB+ 专用分析图"
+  ],
+  "hypothesis_template": "采用 DFTB+ 对该体系进行对应能力族计算。",
+  "keywords": [
+    "dftb",
+    "DFTB+",
+    "紧束缚",
+    "dftb_md",
+    "dftbplus",
+    "md"
+  ],
+  "formula_default": "",
+  "maturity_note": "输入按 DFTB+ Recipes/Manual 生成；投递使用 ~/.dftb-neu 隔离环境。",
+  "dftb_family": "md"
+}

@@ -1,0 +1,16 @@
+{
+  "name": "dftb-neu-windows",
+  "private": true,
+  "version": "0.2.2",
+  "description": "DFTB Neu Windows packaging (shared electron-builder)",
+  "scripts": {
+    "pack:win": "node scripts/pack-win.mjs"
+  },
+  "devDependencies": {
+    "electron": "^35.1.2",
+    "electron-builder": "^26.0.12"
+  },
+  "dependencies": {
+    "localtunnel": "^2.0.2"
+  }
+}

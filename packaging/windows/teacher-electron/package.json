@@ -1,0 +1,54 @@
+{
+  "name": "dftb-neu-teacher",
+  "version": "0.3.5",
+  "description": "DFTB classroom teacher console (no compute)",
+  "main": "main.js",
+  "author": "dftb-neu",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win dir --x64",
+    "dist": "electron-builder --win dir --x64"
+  },
+  "build": {
+    "appId": "org.dftbneu.teacher",
+    "productName": "DFTB-NEU 教师端",
+    "electronVersion": "35.1.2",
+    "directories": {
+      "output": "dist",
+      "buildResources": "../build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "win": {
+      "icon": "../build/icon-teacher.ico",
+      "signExecutable": false,
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "DFTB-Neu-Teacher-${version}.${ext}"
+    },
+    "extraResources": [
+      {
+        "from": "../../../apps/teacher_web",
+        "to": "teacher_web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../build/icon-teacher.ico",
+        "to": "icon.ico"
+      }
+    ]
+  },
+  "devDependencies": {}
+}

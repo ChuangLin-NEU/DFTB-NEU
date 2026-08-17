@@ -1,0 +1,152 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-palette="teal">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DFTB-NEU 教师端</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Source+Sans+3:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+  <link rel="stylesheet" href="styles.css?v=20260805a" />
+</head>
+<body>
+  <div class="shell">
+    <header class="topbar">
+      <div class="brand-block">
+        <img class="brand-mark" src="brand-icon.png" width="36" height="36" alt="" />
+        <div>
+          <div class="brand">DFTB-NEU 教师端</div>
+          <div class="brand-sub">Classroom Gate</div>
+        </div>
+      </div>
+      <div id="conn" class="status-pill" hidden aria-live="polite">
+        <span class="status-dot"></span>
+        <span class="status-label">—</span>
+      </div>
+    </header>
+
+    <main class="panel-page">
+      <header class="page-head">
+        <div>
+          <h1>课堂门禁与会话</h1>
+          <p>发布本堂密码、查看在线学生并注销会话。</p>
+        </div>
+      </header>
+
+      <div class="metric-grid overview-grid">
+        <div class="metric-card">
+          <div class="metric-k">连接状态</div>
+          <div class="metric-v" id="metric-conn">—</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-k">本堂密码</div>
+          <div class="metric-v metric-pwd" id="metric-pwd">未设置</div>
+        </div>
+        <div class="metric-card">
+          <div class="metric-k">永久密码</div>
+          <div class="metric-v latin-num" id="metric-teacher-pwd">—</div>
+        </div>
+      </div>
+
+      <div class="grid-2">
+        <section class="section section-equal">
+          <div class="section-head">
+            <div>
+              <h2>本堂密码</h2>
+              <p>可同时发布多个口令，学生使用任一有效密码即可登录；口令本身不过期，吊销或清空后失效。</p>
+            </div>
+          </div>
+          <div class="pwd-list-wrap">
+            <div class="muted-block pwd-list-label">当前有效口令 <span id="pwd-count" class="count-badge"></span></div>
+            <ul id="pwd-list" class="pwd-list"></ul>
+            <p id="pwd-empty" class="empty-hint">尚未设置本堂密码。</p>
+          </div>
+          <label>添加本堂密码
+            <input id="student-password" type="text" autocomplete="off" />
+          </label>
+          <div class="section-spacer" aria-hidden="true"></div>
+          <p id="msg" class="msg" hidden></p>
+          <div class="btn-row">
+            <button type="button" id="btn-set" class="btn btn-primary">发布本堂密码</button>
+            <button type="button" id="btn-clear" class="btn btn-danger">清空全部</button>
+          </div>
+        </section>
+
+        <section class="section section-equal accent-panel">
+          <div class="section-head">
+            <div>
+              <h2>永久密码</h2>
+              <p>教师端连接课堂中心的凭证，可在此修改。</p>
+            </div>
+          </div>
+          <p class="muted-block">当前永久密码：<strong id="teacher-pwd-current" class="latin-num">—</strong></p>
+          <label>当前永久密码
+            <input id="teacher-pwd-old" type="password" autocomplete="current-password" />
+          </label>
+          <label>新永久密码
+            <input id="teacher-pwd-new" type="password" autocomplete="new-password" />
+          </label>
+          <label>确认新永久密码
+            <input id="teacher-pwd-new2" type="password" autocomplete="new-password" />
+          </label>
+          <div class="section-spacer" aria-hidden="true"></div>
+          <div class="btn-row">
+            <button type="button" id="btn-change-teacher-pwd" class="btn btn-primary">修改永久密码</button>
+          </div>
+          <p id="teacher-pwd-msg" class="msg" hidden></p>
+        </section>
+      </div>
+
+      <section class="section">
+        <div class="section-head">
+          <div>
+            <h2>已登录学生 <span id="count" class="count-badge"></span></h2>
+            <p>实时刷新在线会话。「长期」为永久凭证，清空全部本堂口令时不会被注销。</p>
+          </div>
+          <span class="live-badge" id="live-badge" title="约每 15 秒自动刷新">实时</span>
+        </div>
+        <div class="table-wrap">
+          <table class="table">
+            <thead>
+              <tr>
+                <th>学号</th>
+                <th>状态</th>
+                <th>最近活动</th>
+                <th>登录时间</th>
+                <th>有效期</th>
+                <th>今日 LLM</th>
+                <th>设备</th>
+                <th>类型</th>
+                <th></th>
+              </tr>
+            </thead>
+            <tbody id="students"></tbody>
+          </table>
+        </div>
+        <p id="students-empty" class="empty-hint" hidden>当前没有已登录学生。</p>
+      </section>
+
+      <p class="home-affil">东北大学 · 材料科学与工程学院 · 张林教授课题组</p>
+    </main>
+  </div>
+
+  <div id="app-modal" class="app-modal" hidden>
+    <div class="app-modal-backdrop" data-modal-dismiss></div>
+    <div class="app-modal-card" role="dialog" aria-modal="true" aria-labelledby="app-modal-title">
+      <div class="app-modal-icon" id="app-modal-icon" aria-hidden="true">!</div>
+      <div class="app-modal-body">
+        <h3 id="app-modal-title">确认操作</h3>
+        <p id="app-modal-message"></p>
+        <p id="app-modal-hint" class="app-modal-hint" hidden></p>
+      </div>
+      <div class="app-modal-actions">
+        <button type="button" class="btn btn-ghost" id="app-modal-cancel" data-modal-dismiss>取消</button>
+        <button type="button" class="btn btn-primary" id="app-modal-ok">确定</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js?v=20260805a"></script>
+</body>
+</html>

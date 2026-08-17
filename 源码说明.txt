@@ -1,0 +1,19 @@
+DFTB-NEU Windows 源码包 0.3.5
+================================
+
+内容：仓库源码（apps / engines / templates / scripts / packaging 等），
+不含 node_modules、内置 Python、pydeps、已打好的 Setup。
+
+在 Windows 上重新打 Setup：
+  1. 安装 Node.js LTS、Git（可选）
+  2. cd packaging\windows
+  3. npm install --registry=https://registry.npmmirror.com
+  4. 首次需准备内置 Python 与 pydeps（去掉 SKIP_*）：
+       node scripts\pack-win.mjs
+     若本机已有 packaging\windows\backend\python-win 与 pydeps，可：
+       set SKIP_WIN_PYTHON=1
+       set SKIP_PYDEPS=1
+       node scripts\pack-win.mjs
+  5. 产物在 packaging\windows\release\DFTB_Neu_Setup_0.3.5.exe
+
+学生使用请发 Setup，不要发本源码包。

@@ -1,0 +1,488 @@
+{
+  "version": 3,
+  "source": "https://dftbplus-recipes.readthedocs.io/en/latest/",
+  "note": "status: ready|partial|skeleton。skeleton 默认禁止投递；artifacts/plots 仅对 ready/partial 承诺。",
+  "families": [
+    {
+      "id": "electronic",
+      "recipes": "basics/firstcalc, basics/bandstruct, basics/waveplot",
+      "kinds": [
+        "dftb_scc",
+        "dftb_opt",
+        "dftb_band",
+        "dftb_dos"
+      ],
+      "playbook_id": "dftb_electronic",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out",
+        "band.out",
+        "charges.bin"
+      ],
+      "plots": [
+        "energy",
+        "bands",
+        "dos"
+      ],
+      "status": "ready",
+      "status_note": "主路径已闭环：SCC/能带/DOS（能带+DOS 分网格）。",
+      "submit_enabled": true
+    },
+    {
+      "id": "xtb_in_dftb",
+      "recipes": "xtb/",
+      "kinds": [
+        "dftb_xtb"
+      ],
+      "playbook_id": "dftb_xtb",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out"
+      ],
+      "plots": [
+        "energy"
+      ],
+      "status": "ready",
+      "status_note": "GFN2-xTB 优化已可用。",
+      "submit_enabled": true
+    },
+    {
+      "id": "geometry_vib",
+      "recipes": "basics/firstcalc, moleculardynamics/startinggeometry",
+      "kinds": [
+        "dftb_opt",
+        "dftb_vib"
+      ],
+      "playbook_id": "dftb_opt_vib",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out",
+        "geo_end.gen",
+        "hessian.out"
+      ],
+      "plots": [
+        "opt_energy",
+        "frequencies"
+      ],
+      "status": "ready",
+      "status_note": "几何优化与振动（先短优化）已可用；完整声子见 properties（未闭环）。",
+      "submit_enabled": true
+    },
+    {
+      "id": "md",
+      "recipes": "moleculardynamics/",
+      "kinds": [
+        "dftb_md",
+        "dftb_md_anneal"
+      ],
+      "playbook_id": "dftb_md",
+      "env": "mpi_or_nompi",
+      "artifacts": [
+        "detailed.out",
+        "geo_end.gen"
+      ],
+      "plots": [
+        "md_energy_time",
+        "temperature"
+      ],
+      "status": "partial",
+      "status_note": "BOMD/退火可跑通，默认步数偏演示。",
+      "submit_enabled": true
+    },
+    {
+      "id": "solvation",
+      "recipes": "solvation/",
+      "kinds": [
+        "dftb_solv"
+      ],
+      "playbook_id": "dftb_solvation",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out"
+      ],
+      "plots": [
+        "energy_compare"
+      ],
+      "status": "partial",
+      "status_note": "依赖本机溶剂参数文件。",
+      "submit_enabled": true
+    },
+    {
+      "id": "defect_2d",
+      "recipes": "defect/",
+      "kinds": [
+        "dftb_defect",
+        "dftb_band",
+        "dftb_dos"
+      ],
+      "playbook_id": "dftb_defect_2d",
+      "env": "mpi_or_nompi",
+      "artifacts": [
+        "detailed.out",
+        "band.out"
+      ],
+      "plots": [
+        "bands",
+        "dos"
+      ],
+      "status": "partial",
+      "status_note": "二维空位/掺杂可用，有课堂级简化。",
+      "submit_enabled": true
+    },
+    {
+      "id": "linresp",
+      "recipes": "linresp/",
+      "kinds": [
+        "dftb_td",
+        "dftb_td_relax"
+      ],
+      "playbook_id": "dftb_td",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out",
+        "EXC.DAT"
+      ],
+      "plots": [
+        "absorption_spectrum"
+      ],
+      "status": "ready",
+      "status_note": "Casida 吸收光谱已可用（先短优化）。",
+      "submit_enabled": true
+    },
+    {
+      "id": "electronic_dynamics",
+      "recipes": "electronicdynamics/",
+      "kinds": [
+        "dftb_edyn",
+        "dftb_ehrenfest"
+      ],
+      "playbook_id": "dftb_edyn",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out"
+      ],
+      "plots": [],
+      "status": "skeleton",
+      "status_note": "未闭环：输入骨架，缺时域出图。",
+      "submit_enabled": false
+    },
+    {
+      "id": "properties",
+      "recipes": "properties/",
+      "kinds": [
+        "dftb_phonon",
+        "dftb_barrier"
+      ],
+      "playbook_id": "dftb_phonon",
+      "env": "mpi_or_nompi",
+      "artifacts": [
+        "detailed.out"
+      ],
+      "plots": [],
+      "status": "skeleton",
+      "status_note": "未闭环：声子/能垒不会自动完成。",
+      "submit_enabled": false
+    },
+    {
+      "id": "reks",
+      "recipes": "reks/",
+      "kinds": [
+        "dftb_reks"
+      ],
+      "playbook_id": "dftb_reks",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out"
+      ],
+      "plots": [],
+      "status": "skeleton",
+      "status_note": "未闭环。",
+      "submit_enabled": false
+    },
+    {
+      "id": "transport",
+      "recipes": "transport/",
+      "kinds": [
+        "dftb_transport"
+      ],
+      "playbook_id": "dftb_transport",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out"
+      ],
+      "plots": [],
+      "status": "skeleton",
+      "status_note": "未闭环：缺结几何与透射后处理。",
+      "submit_enabled": false
+    },
+    {
+      "id": "boundary",
+      "recipes": "boundaryconditions/",
+      "kinds": [
+        "dftb_boundary"
+      ],
+      "playbook_id": "dftb_boundary",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out"
+      ],
+      "plots": [],
+      "status": "skeleton",
+      "status_note": "未闭环：螺旋边界未真正启用。",
+      "submit_enabled": false
+    },
+    {
+      "id": "gsm",
+      "recipes": "gsm/",
+      "kinds": [
+        "dftb_gsm"
+      ],
+      "playbook_id": "dftb_gsm",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out"
+      ],
+      "plots": [],
+      "status": "skeleton",
+      "status_note": "未闭环。",
+      "submit_enabled": false
+    },
+    {
+      "id": "interfaces",
+      "recipes": "interfaces/",
+      "kinds": [
+        "dftb_ase",
+        "dftb_ipi"
+      ],
+      "playbook_id": "dftb_interfaces",
+      "env": "nompi",
+      "artifacts": [
+        "detailed.out"
+      ],
+      "plots": [],
+      "status": "skeleton",
+      "status_note": "未闭环：ASE/i-PI 仅示例脚本。",
+      "submit_enabled": false
+    }
+  ],
+  "nl_intent_keywords": {
+    "electronic": [
+      "能带",
+      "band structure",
+      "DOS",
+      "PDOS",
+      "电子结构",
+      "SCC",
+      "单点能量",
+      "静态自洽",
+      "态密度"
+    ],
+    "geometry_vib": [
+      "几何优化",
+      "结构优化",
+      "弛豫",
+      "振动",
+      "振动频率",
+      "红外",
+      "IR",
+      "hessian",
+      "二阶导数",
+      "SecondDerivatives"
+    ],
+    "md": [
+      "分子动力学",
+      "BOMD",
+      "AIMD",
+      "退火",
+      "MD轨迹",
+      "XL-BOMD",
+      "恒温",
+      "VelocityVerlet",
+      "热浴"
+    ],
+    "solvation": [
+      "溶剂",
+      "隐式溶剂",
+      "ALPB",
+      "GBSA",
+      "分配系数",
+      "logP",
+      "logKow",
+      "水相",
+      "辛醇"
+    ],
+    "defect_2d": [
+      "石墨烯缺陷",
+      "石墨烯",
+      "缺陷电子结构",
+      "二维碳",
+      "空位碳",
+      "碳空位",
+      "2D材料电子结构",
+      "缺陷态"
+    ],
+    "linresp": [
+      "吸收光谱",
+      "激发态",
+      "TD-DFTB",
+      "Casida",
+      "线性响应",
+      "振子强度",
+      "EXC.DAT",
+      "紫外可见"
+    ],
+    "electronic_dynamics": [
+      "电子动力学",
+      "Ehrenfest",
+      "时域光谱",
+      "光诱导",
+      "Kick",
+      "实时传播",
+      "ElectronDynamics"
+    ],
+    "properties": [
+      "声子",
+      "phonopy",
+      "反应垒",
+      "能垒",
+      "势垒",
+      "力常数",
+      "phonon"
+    ],
+    "reks": [
+      "REKS",
+      "SSR22",
+      "多参考",
+      "自旋限制",
+      "PPS态"
+    ],
+    "transport": [
+      "输运",
+      "透射",
+      "分子结",
+      "NEGF",
+      "透射谱",
+      "I-V",
+      "局域电流",
+      "ContactHamiltonian",
+      "电极"
+    ],
+    "boundary": [
+      "螺旋边界",
+      "螺旋边界几何",
+      "半无限",
+      "Helical",
+      "螺旋几何",
+      "HelicalUniform"
+    ],
+    "gsm": [
+      "反应路径",
+      "GSM",
+      "过渡态搜索",
+      "Diels-Alder",
+      "增长串",
+      "Claisen"
+    ],
+    "xtb_in_dftb": [
+      "DFTB+ xTB",
+      "GFN1",
+      "GFN2",
+      "扩展紧束缚",
+      "GFN2-xTB",
+      "内建xTB"
+    ],
+    "interfaces": [
+      "ASE DFTB",
+      "ASE 调",
+      "ASE调",
+      " ASE ",
+      "ASE",
+      "i-PI",
+      "Python API",
+      "ASE接口",
+      "socket"
+    ]
+  },
+  "nl_examples": [
+    {
+      "family": "electronic",
+      "text": "用 DFTB+ 算水分子单点 SCC 能量"
+    },
+    {
+      "family": "electronic",
+      "text": "DFTB+ 能带和 DOS"
+    },
+    {
+      "family": "geometry_vib",
+      "text": "用 DFTB+ 对 H2O 做几何优化"
+    },
+    {
+      "family": "geometry_vib",
+      "text": "DFTB+ 计算振动频率"
+    },
+    {
+      "family": "md",
+      "text": "用 DFTB+ 跑 BOMD 分子动力学"
+    },
+    {
+      "family": "md",
+      "text": "DFTB+ 模拟退火"
+    },
+    {
+      "family": "solvation",
+      "text": "DFTB+ 隐式溶剂 ALPB 优化并估 logP"
+    },
+    {
+      "family": "defect_2d",
+      "text": "DFTB+ 算石墨烯缺陷电子结构"
+    },
+    {
+      "family": "linresp",
+      "text": "用 DFTB+ 做 TD-DFTB 吸收光谱"
+    },
+    {
+      "family": "linresp",
+      "text": "Casida 线性响应激发能"
+    },
+    {
+      "family": "electronic_dynamics",
+      "text": "DFTB+ 电子动力学 Kick 光谱"
+    },
+    {
+      "family": "electronic_dynamics",
+      "text": "Ehrenfest 动力学"
+    },
+    {
+      "family": "properties",
+      "text": "DFTB+ 配合 phonopy 算声子"
+    },
+    {
+      "family": "properties",
+      "text": "DFTB+ 反应能垒扫描"
+    },
+    {
+      "family": "reks",
+      "text": "用 DFTB+ 做 REKS SSR22"
+    },
+    {
+      "family": "transport",
+      "text": "DFTB+ 分子结透射与 ContactHamiltonian"
+    },
+    {
+      "family": "boundary",
+      "text": "DFTB+ 螺旋边界几何电子结构"
+    },
+    {
+      "family": "gsm",
+      "text": "DFTB+ GSM 反应路径搜索"
+    },
+    {
+      "family": "xtb_in_dftb",
+      "text": "在 DFTB+ 里用 GFN2-xTB 优化"
+    },
+    {
+      "family": "interfaces",
+      "text": "用 ASE 调 DFTB+ 算能量"
+    }
+  ]
+}

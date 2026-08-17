@@ -1,0 +1,100 @@
+{
+  "name": "dftb-neu",
+  "version": "0.3.5",
+  "description": "DFTB classroom training desktop shell",
+  "main": "main.js",
+  "author": "dftb-neu",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --win dir --x64",
+    "dist": "electron-builder --win dir --x64"
+  },
+  "build": {
+    "appId": "org.dftbneu.app",
+    "productName": "DFTB-NEU 工作台",
+    "electronVersion": "35.1.2",
+    "directories": {
+      "output": "dist",
+      "buildResources": "../build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "win": {
+      "icon": "../build/icon-student.ico",
+      "signExecutable": false,
+      "target": [
+        {
+          "target": "dir",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "DFTB-Neu-${version}.${ext}"
+    },
+    "extraResources": [
+      {
+        "from": "../../../apps/api",
+        "to": "api",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "../../../apps/web",
+        "to": "web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../../../engines",
+        "to": "engines",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "../../../templates",
+        "to": "templates",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../../../scripts",
+        "to": "scripts",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/python-win",
+        "to": "backend/python-win",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../backend/pydeps",
+        "to": "backend/pydeps",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../build/icon-student.ico",
+        "to": "icon.ico"
+      }
+    ]
+  },
+  "devDependencies": {}
+}

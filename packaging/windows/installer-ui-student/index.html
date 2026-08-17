@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DFTB 工作台 · 安装</title>
+  <style>
+    :root {
+      --ink: #0f1b22;
+      --muted: #5a6b76;
+      --line: rgba(15, 27, 34, 0.1);
+      --surface: #eef4f6;
+      --surface-2: #e3ecef;
+      --brand: #0f6e6a;
+      --brand-deep: #0a524f;
+      --accent: #1f7a8c;
+      --ok: #1f7a4d;
+      --danger: #b42318;
+      --shadow: 0 22px 50px rgba(15, 27, 34, 0.12);
+      --display: "Segoe UI Variable Display", "Segoe UI", "Microsoft YaHei UI", sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      width: 100%; height: 100%;
+      background: var(--surface); color: var(--ink);
+      font-family: "Segoe UI", "Microsoft YaHei UI", "PingFang SC", sans-serif;
+      overflow: hidden; user-select: none;
+    }
+    .win {
+      height: 100%;
+      display: grid;
+      grid-template-rows: 36px 1fr;
+      background:
+        radial-gradient(ellipse 90% 55% at 8% -10%, rgba(15, 110, 106, 0.16), transparent 55%),
+        radial-gradient(ellipse 70% 50% at 100% 110%, rgba(31, 122, 140, 0.14), transparent 52%),
+        linear-gradient(160deg, #f5fafb 0%, var(--surface) 46%, var(--surface-2) 100%);
+    }
+    .chrome {
+      display: flex; justify-content: flex-end; align-items: center;
+      -webkit-app-region: drag; padding: 0 8px;
+    }
+    .chrome button {
+      -webkit-app-region: no-drag;
+      width: 34px; height: 26px; border: 0; background: transparent;
+      color: #8a98a3; font-size: 13px; cursor: pointer; border-radius: 6px;
+    }
+    .chrome button:hover { background: rgba(15, 27, 34, 0.06); color: var(--ink); }
+    .chrome button.close:hover { background: #c0392b; color: #fff; }
+    .stage {
+      display: flex; flex-direction: column; align-items: center;
+      padding: 8px 36px 26px; position: relative;
+    }
+    .kicker {
+      font-family: var(--display);
+      font-size: 0.7rem; letter-spacing: 0.24em; text-transform: uppercase;
+      color: var(--accent); font-weight: 650; margin-top: 6px;
+    }
+    .logo {
+      width: 86px; height: 86px; margin: 16px auto 0; display: block;
+      border-radius: 22px; object-fit: cover; box-shadow: var(--shadow);
+      border: 1px solid rgba(255,255,255,0.7);
+    }
+    .brand-block {
+      margin-top: 16px; display: flex; flex-direction: column;
+      align-items: center; text-align: center; gap: 8px;
+    }
+    .brand-block h1 {
+      font-family: var(--display);
+      font-size: 1.85rem; font-weight: 700; letter-spacing: 0.02em; line-height: 1.15;
+    }
+    .ver {
+      font-size: 0.72rem; color: var(--muted); border: 1px solid var(--line);
+      border-radius: 999px; padding: 3px 10px; background: rgba(255,255,255,0.65); line-height: 1.2;
+    }
+    .lead {
+      margin-top: 12px; max-width: 28em; text-align: center;
+      color: var(--muted); font-size: 0.9rem; line-height: 1.55;
+    }
+    .install-btn {
+      margin-top: 26px; width: 100%; max-width: 280px; height: 48px; border: 0; border-radius: 12px;
+      background: linear-gradient(135deg, #149088 0%, var(--brand-deep) 100%);
+      color: #f4fffd; font-size: 1rem; font-weight: 650; letter-spacing: 0.12em; cursor: pointer;
+      box-shadow: 0 12px 28px rgba(15, 110, 106, 0.28);
+      transition: filter .15s ease, transform .08s ease;
+    }
+    .install-btn:hover:not(:disabled) { filter: brightness(1.06); }
+    .install-btn:active:not(:disabled) { transform: translateY(1px); }
+    .install-btn:disabled { opacity: 0.5; cursor: not-allowed; box-shadow: none; }
+    .install-btn.accent {
+      background: linear-gradient(135deg, #2a93a8, #155f6d);
+      box-shadow: 0 12px 28px rgba(31, 122, 140, 0.28);
+    }
+    .agree {
+      margin-top: 14px; display: flex; align-items: center; gap: 8px;
+      color: var(--muted); font-size: 0.82rem; cursor: pointer;
+    }
+    .agree input {
+      appearance: none; width: 15px; height: 15px; border: 1.5px solid #b7c4cb;
+      border-radius: 50%; display: grid; place-items: center; cursor: pointer;
+      flex-shrink: 0; background: #fff;
+    }
+    .agree input:checked { border-color: var(--brand); background: var(--brand); }
+    .agree input:checked::after {
+      content: ""; width: 5px; height: 5px; border-radius: 50%; background: #fff;
+    }
+    .agree a { color: var(--brand); text-decoration: none; }
+    .agree a:hover { text-decoration: underline; }
+    .path-toggle {
+      margin-top: auto; padding-top: 18px; border: 0; background: transparent;
+      color: #8a98a3; font-size: 0.8rem; cursor: pointer;
+      display: inline-flex; align-items: center; gap: 4px;
+    }
+    .path-toggle:hover { color: var(--muted); }
+    .path-toggle .caret { font-size: 10px; transition: transform .15s ease; }
+    .path-toggle.open .caret { transform: rotate(180deg); }
+    .path-panel { width: 100%; max-width: 320px; margin-top: 10px; display: none; gap: 8px; }
+    .path-panel.show { display: flex; }
+    .path-panel input {
+      flex: 1; height: 36px; border: 1px solid var(--line); border-radius: 10px;
+      padding: 0 12px; font-size: 0.78rem; color: #3d4d57; outline: none;
+      background: rgba(255,255,255,0.88);
+    }
+    .path-panel input:focus { border-color: rgba(15, 110, 106, 0.45); }
+    .path-panel button {
+      height: 36px; padding: 0 12px; border: 1px solid var(--line); border-radius: 10px;
+      background: #fff; color: #4a5a64; font-size: 0.78rem; cursor: pointer;
+    }
+    .path-panel button:hover { background: #f3f7f8; }
+    .progress-wrap { display: none; width: 100%; max-width: 280px; margin-top: 26px; text-align: center; }
+    .progress-wrap.show { display: block; }
+    .bar { height: 5px; background: rgba(15, 27, 34, 0.08); border-radius: 99px; overflow: hidden; }
+    .bar > i {
+      display: block; height: 100%; width: 0%;
+      background: linear-gradient(90deg, var(--brand), var(--accent));
+      border-radius: 99px; transition: width .28s ease;
+    }
+    .msg { margin-top: 12px; font-size: 0.84rem; color: var(--muted); min-height: 1.3em; line-height: 1.45; }
+    .err {
+      margin-top: 10px; font-size: 0.78rem; color: var(--danger);
+      max-width: 300px; text-align: center; line-height: 1.45; display: none;
+    }
+    .err.show { display: block; }
+    .done { display: none; width: 100%; max-width: 280px; margin-top: 22px; flex-direction: column; gap: 10px; }
+    .done.show { display: flex; }
+    .done .note {
+      text-align: center; font-size: 0.82rem; color: var(--ok); line-height: 1.45; margin-bottom: 4px;
+    }
+    .done .secondary {
+      height: 44px; border-radius: 12px; border: 1px solid var(--line);
+      background: rgba(255,255,255,0.8); color: #3d4d57; font-size: 0.95rem; cursor: pointer;
+    }
+    .done .secondary:hover { background: #fff; }
+    .toast-proto {
+      display: none; position: absolute; inset: 0; background: rgba(15, 27, 34, 0.32);
+      align-items: center; justify-content: center; z-index: 20; backdrop-filter: blur(3px);
+    }
+    .toast-proto.show { display: flex; }
+    .toast-proto .card {
+      width: 320px; background: #f8fcfd; border-radius: 16px; padding: 22px 20px 16px;
+      box-shadow: var(--shadow); border: 1px solid var(--line);
+    }
+    .toast-proto h3 {
+      font-family: var(--display); font-size: 1.05rem; margin-bottom: 8px;
+    }
+    .toast-proto p { font-size: 0.84rem; color: #4a5a64; line-height: 1.6; }
+    .toast-proto .ok {
+      margin-top: 14px; width: 100%; height: 38px; border: 0; border-radius: 10px;
+      background: var(--brand); color: #fff; cursor: pointer; font-weight: 650;
+    }
+  </style>
+</head>
+<body>
+  <div class="win">
+    <div class="chrome">
+      <button type="button" id="btnMin" aria-label="最小化">─</button>
+      <button type="button" class="close" id="btnClose" aria-label="关闭">✕</button>
+    </div>
+    <div class="stage" id="stageMain">
+      <div class="kicker">Student · DFTB Neu</div>
+      <img class="logo" src="icon.png" alt="DFTB 工作台" draggable="false" />
+      <div class="brand-block">
+        <h1>DFTB 工作台</h1>
+        <span class="ver" id="ver">0.2.1</span>
+      </div>
+      <p class="lead">学生端本机计算客户端。安装后即可打开；教学场景登录服务中心，再完成「部署到本机」。</p>
+      <button type="button" class="install-btn" id="btnInstall">开始安装</button>
+      <label class="agree">
+        <input type="checkbox" id="agree" checked />
+        <span>我已阅读并同意<a href="#" id="linkProto">使用协议</a></span>
+      </label>
+      <button type="button" class="path-toggle" id="pathToggle">
+        安装路径 <span class="caret">▾</span>
+      </button>
+      <div class="path-panel" id="pathPanel">
+        <input id="installDir" type="text" spellcheck="false" />
+        <button type="button" id="btnBrowse">更改</button>
+      </div>
+      <div class="progress-wrap" id="progressWrap">
+        <div class="bar"><i id="barFill"></i></div>
+        <div class="msg" id="msg">准备中…</div>
+      </div>
+      <div class="err" id="err"></div>
+      <div class="done" id="doneWrap">
+        <div class="note" id="doneNote">安装完成。首次启动请完成「部署到本机」；教学使用再登录服务中心。</div>
+        <button type="button" class="install-btn accent" id="btnLaunch">立即打开</button>
+        <button type="button" class="secondary" id="btnFinish">完成</button>
+      </div>
+    </div>
+  </div>
+  <div class="toast-proto" id="proto">
+    <div class="card">
+      <h3>使用协议（摘要）</h3>
+      <p>
+        DFTB 工作台面向科研与教学中的 DFTB+ 本机计算。课题数据默认保存在本机用户目录；
+        经服务中心转发的大模型与 Materials Project 请求，密钥由中心保管。
+        定量结论与文稿须经研究人员人工复核。
+      </p>
+      <button type="button" class="ok" id="protoOk">知道了</button>
+    </div>
+  </div>
+  <script>
+    const $ = (id) => document.getElementById(id);
+    let exePath = '';
+    let installing = false;
+
+    function setErr(text) {
+      const el = $('err');
+      if (!text) { el.textContent = ''; el.classList.remove('show'); return; }
+      el.textContent = text;
+      el.classList.add('show');
+    }
+
+    async function boot() {
+      const meta = await window.setupApi.meta();
+      $('ver').textContent = meta.version || '0.2.1';
+      $('installDir').value = meta.defaultDir || '';
+      if (!meta.hasPayload) {
+        setErr('安装包不完整：缺少程序资源。请重新下载 Setup。');
+        $('btnInstall').disabled = true;
+      }
+    }
+
+    $('btnMin').onclick = () => window.setupApi.window('minimize');
+    $('btnClose').onclick = () => window.setupApi.window('close');
+    $('pathToggle').onclick = () => {
+      const open = $('pathPanel').classList.toggle('show');
+      $('pathToggle').classList.toggle('open', open);
+    };
+    $('btnBrowse').onclick = async () => {
+      const picked = await window.setupApi.pickDir($('installDir').value);
+      if (picked) $('installDir').value = picked;
+    };
+    $('linkProto').onclick = (e) => { e.preventDefault(); $('proto').classList.add('show'); };
+    $('protoOk').onclick = () => $('proto').classList.remove('show');
+    $('agree').onchange = () => {
+      if (!installing && !$('doneWrap').classList.contains('show')) {
+        $('btnInstall').disabled = !$('agree').checked;
+      }
+    };
+    window.setupApi.onProgress((p) => {
+      $('barFill').style.width = `${Math.max(0, Math.min(100, p.pct || 0))}%`;
+      $('msg').textContent = p.message || '';
+    });
+    $('btnInstall').onclick = async () => {
+      if (!$('agree').checked) { setErr('请先勾选使用协议'); return; }
+      setErr('');
+      installing = true;
+      $('btnInstall').style.display = 'none';
+      $('agree').parentElement.style.display = 'none';
+      $('pathToggle').style.display = 'none';
+      $('pathPanel').classList.remove('show');
+      $('progressWrap').classList.add('show');
+      $('btnInstall').disabled = true;
+      try {
+        const res = await window.setupApi.install({
+          installDir: $('installDir').value.trim(),
+          desktop: true,
+        });
+        exePath = res.exePath;
+        $('progressWrap').classList.remove('show');
+        $('doneWrap').classList.add('show');
+        if (res.networkMessage) $('doneNote').textContent = res.networkMessage;
+      } catch (err) {
+        setErr(err?.message || String(err));
+        $('btnInstall').style.display = '';
+        $('agree').parentElement.style.display = '';
+        $('pathToggle').style.display = '';
+        $('progressWrap').classList.remove('show');
+        $('btnInstall').disabled = !$('agree').checked;
+        installing = false;
+      }
+    };
+    $('btnLaunch').onclick = async () => {
+      try {
+        await window.setupApi.launch(exePath);
+        window.setupApi.window('close');
+      } catch (err) {
+        setErr(err?.message || String(err));
+      }
+    };
+    $('btnFinish').onclick = () => window.setupApi.window('close');
+    boot();
+  </script>
+</body>
+</html>

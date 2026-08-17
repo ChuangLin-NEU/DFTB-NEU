@@ -1,0 +1,265 @@
+[
+  {
+    "id": "ssp01_crystal",
+    "title": "晶体结构与倒格矢",
+    "kind": "dftb_scc",
+    "sk_set": "pbc",
+    "maturity": {
+      "status": "ready",
+      "label": "已可用",
+      "note": "单点 SCC；分子/周期均可。",
+      "kind": "dftb_scc",
+      "allow_submit": true
+    },
+    "allow_submit": true,
+    "recipe_ready": true,
+    "hsd_len": 618,
+    "struct_ok": true,
+    "checks": [
+      {
+        "name": "has_Geometry",
+        "ok": true,
+        "desc": "Geometry/内嵌结构"
+      },
+      {
+        "name": "has_Hamiltonian",
+        "ok": true,
+        "desc": "Hamiltonian 块"
+      },
+      {
+        "name": "has_SK",
+        "ok": true,
+        "desc": "SK 文件声明"
+      }
+    ],
+    "failed_checks": [],
+    "warn": "",
+    "pass": true,
+    "hsd_head": "Geometry = GenFormat {\n  <<< \"geo.gen\"\n}\n\nHamiltonian = DFTB {\n  SCC = Yes\n  SCCTolerance = 1.0E-5\n  MaxSCCIterations = 250\n  Mixer = Broyden { MixingParameter = 0.2 }\n  MaxAngularMomentum = {\n    Si = \"p\"\n  }\n  SlaterKosterFiles = Type2FileNames {\n    Prefix = \"$HOME/.dftb-neu/share/dftb/sk/pbc/\"\n    Separator = \"-\"\n    Suffix = \".skf\"\n  }\n  Filling = Fermi {\n    Temperature [K] = 300.0\n  }\n  KPointsAndWeights = SupercellFolding {\n    4 0 0\n    0 4 0\n    0 0 4\n    0.0 0.0 0.0"
+  },
+  {
+    "id": "ssp02_binding",
+    "title": "固体结合与总能量",
+    "kind": "dftb_scc",
+    "sk_set": "pbc",
+    "maturity": {
+      "status": "ready",
+      "label": "已可用",
+      "note": "单点 SCC；分子/周期均可。",
+      "kind": "dftb_scc",
+      "allow_submit": true
+    },
+    "allow_submit": true,
+    "recipe_ready": true,
+    "hsd_len": 618,
+    "struct_ok": true,
+    "checks": [
+      {
+        "name": "has_Geometry",
+        "ok": true,
+        "desc": "Geometry/内嵌结构"
+      },
+      {
+        "name": "has_Hamiltonian",
+        "ok": true,
+        "desc": "Hamiltonian 块"
+      },
+      {
+        "name": "has_SK",
+        "ok": true,
+        "desc": "SK 文件声明"
+      }
+    ],
+    "failed_checks": [],
+    "warn": "",
+    "pass": true,
+    "hsd_head": "Geometry = GenFormat {\n  <<< \"geo.gen\"\n}\n\nHamiltonian = DFTB {\n  SCC = Yes\n  SCCTolerance = 1.0E-5\n  MaxSCCIterations = 250\n  Mixer = Broyden { MixingParameter = 0.2 }\n  MaxAngularMomentum = {\n    Si = \"p\"\n  }\n  SlaterKosterFiles = Type2FileNames {\n    Prefix = \"$HOME/.dftb-neu/share/dftb/sk/pbc/\"\n    Separator = \"-\"\n    Suffix = \".skf\"\n  }\n  Filling = Fermi {\n    Temperature [K] = 300.0\n  }\n  KPointsAndWeights = SupercellFolding {\n    4 0 0\n    0 4 0\n    0 0 4\n    0.0 0.0 0.0"
+  },
+  {
+    "id": "ssp03_phonon",
+    "title": "晶格振动入门：平衡结构",
+    "kind": "dftb_opt",
+    "sk_set": "pbc",
+    "maturity": {
+      "status": "ready",
+      "label": "已可用",
+      "note": "几何优化；可查看能量轨迹与优化后结构。",
+      "kind": "dftb_opt",
+      "allow_submit": true
+    },
+    "allow_submit": true,
+    "recipe_ready": true,
+    "hsd_len": 772,
+    "struct_ok": true,
+    "checks": [
+      {
+        "name": "has_Geometry",
+        "ok": true,
+        "desc": "Geometry/内嵌结构"
+      },
+      {
+        "name": "has_Hamiltonian",
+        "ok": true,
+        "desc": "Hamiltonian 块"
+      },
+      {
+        "name": "has_SK",
+        "ok": true,
+        "desc": "SK 文件声明"
+      },
+      {
+        "name": "driver_opt",
+        "ok": true,
+        "desc": "几何优化 Driver"
+      }
+    ],
+    "failed_checks": [],
+    "warn": "",
+    "pass": true,
+    "hsd_head": "Geometry = GenFormat {\n  <<< \"geo.gen\"\n}\n\nHamiltonian = DFTB {\n  SCC = Yes\n  SCCTolerance = 1.0E-5\n  MaxSCCIterations = 250\n  Mixer = Broyden { MixingParameter = 0.2 }\n  MaxAngularMomentum = {\n    Si = \"p\"\n  }\n  SlaterKosterFiles = Type2FileNames {\n    Prefix = \"$HOME/.dftb-neu/share/dftb/sk/pbc/\"\n    Separator = \"-\"\n    Suffix = \".skf\"\n  }\n  Filling = Fermi {\n    Temperature [K] = 300.0\n  }\n  KPointsAndWeights = SupercellFolding {\n    4 0 0\n    0 4 0\n    0 0 4\n    0.0 0.0 0.0"
+  },
+  {
+    "id": "ssp04_band",
+    "title": "能带理论：硅的能带与态密度",
+    "kind": "dftb_band",
+    "sk_set": "pbc",
+    "maturity": {
+      "status": "ready",
+      "label": "已可用",
+      "note": "先几何优化再沿高对称路径算能带；若同时要 DOS 会另跑均匀 k 网格。",
+      "kind": "dftb_band",
+      "allow_submit": true
+    },
+    "allow_submit": true,
+    "recipe_ready": true,
+    "hsd_len": 861,
+    "struct_ok": true,
+    "checks": [
+      {
+        "name": "has_Geometry",
+        "ok": true,
+        "desc": "Geometry/内嵌结构"
+      },
+      {
+        "name": "has_Hamiltonian",
+        "ok": true,
+        "desc": "Hamiltonian 块"
+      },
+      {
+        "name": "has_SK",
+        "ok": true,
+        "desc": "SK 文件声明"
+      },
+      {
+        "name": "band_KPoints",
+        "ok": true,
+        "desc": "能带 k 路径"
+      },
+      {
+        "name": "band_out",
+        "ok": true,
+        "desc": "电子结构输出相关"
+      }
+    ],
+    "failed_checks": [],
+    "warn": "",
+    "pass": true,
+    "hsd_head": "Geometry = GenFormat {\n  <<< \"geo.gen\"\n}\n\nHamiltonian = DFTB {\n  SCC = Yes\n  SCCTolerance = 1.0E-5\n  MaxSCCIterations = 250\n  Mixer = Broyden { MixingParameter = 0.2 }\n  MaxAngularMomentum = {\n    Si = \"p\"\n  }\n  SlaterKosterFiles = Type2FileNames {\n    Prefix = \"$HOME/.dftb-neu/share/dftb/sk/pbc/\"\n    Separator = \"-\"\n    Suffix = \".skf\"\n  }\n  Filling = Fermi {\n    Temperature [K] = 300.0\n  }\n  KPointsAndWeights = Klines {\n      1  0.000000  0.000000  0.000000    # G\n      20  0.500000  0.000000  0.500000    # X\n      20  0.500000  0.250000  0.750000    # W\n      20  0.375000  0.375000  0.750000    # K"
+  },
+  {
+    "id": "ssp05_graphene",
+    "title": "二维晶体：石墨烯",
+    "kind": "dftb_band",
+    "sk_set": "3ob",
+    "maturity": {
+      "status": "ready",
+      "label": "已可用",
+      "note": "先几何优化再沿高对称路径算能带；若同时要 DOS 会另跑均匀 k 网格。",
+      "kind": "dftb_band",
+      "allow_submit": true
+    },
+    "allow_submit": true,
+    "recipe_ready": true,
+    "hsd_len": 768,
+    "struct_ok": true,
+    "checks": [
+      {
+        "name": "has_Geometry",
+        "ok": true,
+        "desc": "Geometry/内嵌结构"
+      },
+      {
+        "name": "has_Hamiltonian",
+        "ok": true,
+        "desc": "Hamiltonian 块"
+      },
+      {
+        "name": "has_SK",
+        "ok": true,
+        "desc": "SK 文件声明"
+      },
+      {
+        "name": "band_KPoints",
+        "ok": true,
+        "desc": "能带 k 路径"
+      },
+      {
+        "name": "band_out",
+        "ok": true,
+        "desc": "电子结构输出相关"
+      }
+    ],
+    "failed_checks": [],
+    "warn": "",
+    "pass": true,
+    "hsd_head": "Geometry = GenFormat {\n  <<< \"geo.gen\"\n}\n\nHamiltonian = DFTB {\n  SCC = Yes\n  SCCTolerance = 1.0E-5\n  MaxSCCIterations = 250\n  Mixer = Broyden { MixingParameter = 0.2 }\n  MaxAngularMomentum = {\n    C = \"p\"\n  }\n  SlaterKosterFiles = Type2FileNames {\n    Prefix = \"$HOME/.dftb-neu/share/dftb/sk/3ob/\"\n    Separator = \"-\"\n    Suffix = \".skf\"\n  }\n  Filling = Fermi {\n    Temperature [K] = 300.0\n  }\n  KPointsAndWeights = Klines {\n      1  0.000000  0.000000  0.000000    # G\n      30  0.500000  0.000000  0.000000    # M\n      30  0.333333  0.333333  0.000000    # K\n      30  0.000000  0.000000  0.000000    # G"
+  },
+  {
+    "id": "ssp06_defect",
+    "title": "缺陷与局域态",
+    "kind": "dftb_band",
+    "sk_set": "3ob",
+    "maturity": {
+      "status": "ready",
+      "label": "已可用",
+      "note": "先几何优化再沿高对称路径算能带；若同时要 DOS 会另跑均匀 k 网格。",
+      "kind": "dftb_band",
+      "allow_submit": true
+    },
+    "allow_submit": true,
+    "recipe_ready": true,
+    "hsd_len": 894,
+    "struct_ok": true,
+    "checks": [
+      {
+        "name": "has_Geometry",
+        "ok": true,
+        "desc": "Geometry/内嵌结构"
+      },
+      {
+        "name": "has_Hamiltonian",
+        "ok": true,
+        "desc": "Hamiltonian 块"
+      },
+      {
+        "name": "has_SK",
+        "ok": true,
+        "desc": "SK 文件声明"
+      },
+      {
+        "name": "band_KPoints",
+        "ok": true,
+        "desc": "能带 k 路径"
+      },
+      {
+        "name": "band_out",
+        "ok": true,
+        "desc": "电子结构输出相关"
+      }
+    ],
+    "failed_checks": [],
+    "warn": "",
+    "pass": true,
+    "hsd_head": "Geometry = GenFormat {\n  <<< \"geo.gen\"\n}\n\nHamiltonian = DFTB {\n  SCC = Yes\n  SCCTolerance = 1.0E-5\n  MaxSCCIterations = 250\n  Mixer = Broyden { MixingParameter = 0.2 }\n  MaxAngularMomentum = {\n    C = \"p\"\n  }\n  SlaterKosterFiles = Type2FileNames {\n    Prefix = \"$HOME/.dftb-neu/share/dftb/sk/3ob/\"\n    Separator = \"-\"\n    Suffix = \".skf\"\n  }\n  Filling = Fermi {\n    Temperature [K] = 300.0\n  }\n  SpinPolarisation = Colinear {\n    UnpairedElectrons = 1\n  }\n  SpinConstants = {\n    C = { -0.031 -0.025 -0.025 -0.023 }"
+  }
+]

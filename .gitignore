@@ -1,0 +1,18 @@
+.DS_Store
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+node_modules/
+packaging/windows/electron/dist/
+packaging/windows/teacher-electron/dist/
+packaging/windows/release/
+packaging/windows/backend/python-win/
+packaging/windows/backend/pydeps/
+packaging/windows/.cache/
+*.log
+.pytest_cache/
+.mypy_cache/
+# 密钥与本机配置进库
+*.egg-info/
+data/projects/

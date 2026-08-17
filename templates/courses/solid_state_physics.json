@@ -1,0 +1,139 @@
+{
+  "id": "solid_state_physics",
+  "title": "固体物理课堂演示",
+  "description": "按国内主流固体物理教材（黄昆体系）编排：晶体结构 → 结合与能量 → 晶格振动 → 能带理论 → 二维材料 → 缺陷。每课内置结构，强调物理图像与课堂演示。",
+  "curriculum_note": "对齐黄昆《固体物理学》常见本科主线：晶体结构与倒格子、固体结合、晶格振动、能带论；其后接二维与缺陷作为材料拓展。",
+  "lessons": [
+    {
+      "id": "ssp01_crystal",
+      "index": 1,
+      "title": "晶体结构与倒格矢",
+      "chapter": "第一章 · 晶体结构",
+      "topic": "晶胞、周期性与倒空间",
+      "knowledge": "晶体由格点周期重复构成；正格子描述实空间排列，倒格子描述衍射与布里渊区。硅的金刚石结构是共价四面体配位的典型。本课用自洽电荷单点，先认识结构文件与总能量输出。",
+      "objectives": [
+        "对照 POSCAR 识别硅金刚石结构",
+        "理解周期边界与倒空间的对应关系",
+        "读出单点计算的总能量与自洽信息"
+      ],
+      "prompt": "用 DFTB+ 对硅晶体做 SCC 单点计算",
+      "capability_family": "electronic",
+      "kind": "dftb_scc",
+      "structure_file": "si_diamond.poscar",
+      "structure_hint": "内置硅金刚石结构（Materials Project mp-149）。",
+      "mp_id": "mp-149",
+      "needs_structure": true,
+      "expected_observables": ["总能量", "自洽收敛", "Fermi 能级"],
+      "quiz": "为什么讨论能带前要先引入倒格子与布里渊区？"
+    },
+    {
+      "id": "ssp02_binding",
+      "index": 2,
+      "title": "固体结合与总能量",
+      "chapter": "第二章 · 固体的结合",
+      "topic": "结合类型与能量尺度",
+      "knowledge": "固体结合包括离子、共价、金属与范德瓦耳斯等类型，表现为不同的结合能尺度与电子分布。对同一硅结构做自洽计算，可把「总能量」与结合稳定性的课堂概念对应起来（定性理解即可）。",
+      "objectives": [
+        "联系共价结合与硅四面体配位",
+        "用总能量结果讨论「体系是否自洽稳定」",
+        "区分电子自洽与几何优化两个层次"
+      ],
+      "prompt": "用 DFTB+ 对硅晶体做 SCC 单点计算，关注总能量与 Fermi 能级",
+      "capability_family": "electronic",
+      "kind": "dftb_scc",
+      "structure_file": "si_diamond.poscar",
+      "structure_hint": "与第 1 课同一硅结构，侧重能量解读。",
+      "mp_id": "mp-149",
+      "needs_structure": true,
+      "expected_observables": ["总能量", "Fermi 能级", "自洽收敛"],
+      "quiz": "共价晶体与金属晶体在结合图像上最主要的区别是什么？"
+    },
+    {
+      "id": "ssp03_phonon",
+      "index": 3,
+      "title": "晶格振动入门：平衡结构",
+      "chapter": "第三章 · 晶格振动与热学性质",
+      "topic": "平衡几何与振动前准备",
+      "knowledge": "讨论声子与热学性质前，需先得到稳定的平衡结构：原子受力近零、总能量处于局域极小。本课对硅金刚石结构做几何优化，观察能量随步数下降并收敛，建立「平衡位置 → 小振动展开」的课堂图像。完整声子谱（Phonopy 等）可在课外扩展。",
+      "objectives": [
+        "理解几何优化与平衡结构的关系",
+        "读出优化过程中总能量的变化趋势",
+        "说明为何振动分析要以平衡构型为起点"
+      ],
+      "prompt": "用 DFTB+ 对硅晶体做几何优化，观察平衡结构与总能量收敛",
+      "capability_family": "geometry_vib",
+      "kind": "dftb_opt",
+      "structure_file": "si_diamond.poscar",
+      "structure_hint": "内置硅金刚石结构；本课跑通几何优化（振动前的必要步骤）。",
+      "mp_id": "mp-149",
+      "needs_structure": true,
+      "expected_observables": ["几何收敛", "总能量轨迹", "最终总能量"],
+      "quiz": "为什么计算声子谱前通常要先把结构优化到受力接近零？"
+    },
+    {
+      "id": "ssp04_band",
+      "index": 4,
+      "title": "能带理论：硅的能带与态密度",
+      "chapter": "第四章 · 能带理论",
+      "topic": "布洛赫电子、能带与态密度",
+      "knowledge": "周期势中电子满足布洛赫定理，形成能带；态密度描述单位能量间隔内的电子态数。沿高对称路径画出能带，并结合 DOS，是固体物理课认识导体/半导体/绝缘体的核心演示。",
+      "objectives": [
+        "把高对称 k 路径与布里渊区联系起来",
+        "识读能带图与 DOS 图的关键特征",
+        "定性讨论带隙与占据态"
+      ],
+      "prompt": "用 DFTB+ 计算硅晶体能带和 DOS",
+      "capability_family": "electronic",
+      "kind": "dftb_band",
+      "structure_file": "si_diamond.poscar",
+      "structure_hint": "内置硅结构；输出能带路径图与态密度。",
+      "mp_id": "mp-149",
+      "needs_structure": true,
+      "expected_observables": ["能带图", "DOS", "带隙定性特征"],
+      "quiz": "能带图横轴上的 Γ、X、L 等符号代表什么？"
+    },
+    {
+      "id": "ssp05_graphene",
+      "index": 5,
+      "title": "二维晶体：石墨烯",
+      "chapter": "拓展 · 低维与表面",
+      "topic": "二维周期边界与 Dirac 锥图像",
+      "knowledge": "石墨烯是二维蜂窝格子；倒空间中 K 点附近呈现线性色散（Dirac 锥），是理解二维材料电子结构的经典课堂例子。较大的 c 轴用于隔开真空层，近似二维周期体系。",
+      "objectives": [
+        "理解二维晶格与真空层设置",
+        "观察 Dirac 点附近能带的定性特征",
+        "对比三维硅与二维碳的电子结构差异"
+      ],
+      "prompt": "用 DFTB+ 计算石墨烯能带结构",
+      "capability_family": "electronic",
+      "kind": "dftb_band",
+      "structure_file": "graphene.poscar",
+      "structure_hint": "内置石墨烯结构（Materials Project mp-48，含真空层）。",
+      "mp_id": "mp-48",
+      "needs_structure": true,
+      "expected_observables": ["能带图", "二维 K 点路径"],
+      "quiz": "POSCAR 中较大的 c 轴主要起什么作用？"
+    },
+    {
+      "id": "ssp06_defect",
+      "index": 6,
+      "title": "缺陷与局域态",
+      "chapter": "拓展 · 缺陷",
+      "topic": "空位对电子结构的影响",
+      "knowledge": "真实晶体常有点缺陷；空位会破坏平移对称性并可能引入局域电子态，从而改变态密度与输运。用含空位的石墨烯超胞与完整晶格对比，是课堂理解「缺陷 → 电子结构」的直观路径。",
+      "objectives": [
+        "对比完整与含空位石墨烯",
+        "讨论缺陷引入局域态的概念",
+        "说明超胞方法在缺陷计算中的角色"
+      ],
+      "prompt": "用 DFTB+ 计算二维缺陷体系能带（石墨烯空位）",
+      "capability_family": "defect_2d",
+      "kind": "dftb_band",
+      "structure_file": "graphene_vacancy.poscar",
+      "structure_hint": "内置 2×2 石墨烯超胞并去掉一个碳原子。",
+      "needs_structure": true,
+      "expected_observables": ["能带变化", "缺陷相关特征（定性）"],
+      "quiz": "相对完整晶格，空位通常如何影响电子态密度？"
+    }
+  ]
+}
