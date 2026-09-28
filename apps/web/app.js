@@ -3,6 +3,9 @@ let currentProjectId = "";
 let structureKind = "poscar";
 /** 结构是否来自用户上传（上传后生成时保留，不被内置模板清掉）。 */
 let structureUserOwned = false;
+/** 输入文件是否来自用户上传（确认计算时原样投递，不被自动生成覆盖）。 */
+let hsdUserOwned = false;
+let hsdUploadName = "";
 let courseHints = { family: "", kind: "" };
 let hintPrompt = "";
 let hsdDefaultText = "";
@@ -75,7 +78,7 @@ function formatApiError(raw) {
   }
   if (/^Internal Server Error$/i.test(msg) || /^500\b/.test(msg)) {
     msg =
-      "登录失败：本地服务异常或无法连接课堂中心。请确认已连接 Tailscale/课题组网络后重试";
+      "登录失败：本地服务异常或无法连接课堂中心。请确认课堂服务在线后重试";
   }
   return msg || "请求失败";
 }
@@ -301,7 +304,10 @@ function switchTab(name, opts) {
   });
   // skipLoad：调用方会自己 loadProjects（避免与投递后展开详情抢跑）
   if (name === "projects" && !options.skipLoad) loadProjects().catch(() => {});
-  if (name === "deploy") refreshDeploy().catch(() => {});
+  if (name === "deploy") {
+    refreshDeploy().catch(() => {});
+    resumeDeployIfRunning().catch(() => {});
+  }
   if (name === "settings") loadSettings().catch(() => {});
   if (name === "courses") loadCourses().catch(() => {});
   if (name === "chat" || name === "home") loadExamples().catch(() => {});
@@ -330,7 +336,10 @@ function showHsdPreview(text, meta, opts) {
   if (metaEl) metaEl.textContent = meta || (body ? "可编辑后确认计算" : "可编辑后确认计算");
   if (panel) panel.hidden = !body;
   const restoreBtn = $("btn-restore-hsd");
-  if (restoreBtn) restoreBtn.hidden = !hsdDefaultText;
+  if (restoreBtn) {
+    restoreBtn.hidden = !hsdDefaultText;
+    restoreBtn.textContent = hsdUserOwned ? "恢复上传原文" : "恢复推荐默认";
+  }
   if (options.tips) renderHsdTips(options.tips);
   else if (!body) renderHsdTips([]);
   if (body) $("btn-submit").disabled = false;
@@ -548,6 +557,8 @@ function clearCalcPage() {
   autoPreviewBusy = false;
   lastAutoPreviewKey = "";
   hsdDefaultText = "";
+  hsdUserOwned = false;
+  hsdUploadName = "";
   clearChatLog();
   if ($("chat-input")) $("chat-input").value = "";
   showHsdPreview("");
@@ -588,11 +599,42 @@ function applyPalette(name) {
   });
 }
 
-function setCheckItem(id, ok, text) {
+function envCardText(raw, fallback) {
+  const t = String(raw || "").replace(/\u0000/g, "").trim();
+  if (!t) return fallback;
+  const bad = (t.match(/\uFFFD/g) || []).length;
+  if (bad >= 2 || /wsl\.exe --install|aka\.ms\/wslinstall/i.test(t)) return fallback;
+  return t.length > 80 ? t.slice(0, 80) + "…" : t;
+}
+
+function envLogLooksGarbled(raw) {
+  const t = String(raw || "");
+  if (!t.trim()) return false;
+  if ((t.match(/\uFFFD/g) || []).length >= 2) return true;
+  if (/([\u4e00-\u9fff]{2,4})\1{3,}/.test(t)) return true;
+  if (/瀹夎|澶辫触|å®è£|å¤±è´¥/.test(t)) return true;
+  const cjk = (t.match(/[\u4e00-\u9fff]/g) || []).length;
+  const latin = (t.match(/[A-Za-z]/g) || []).length;
+  return t.length > 40 && cjk > t.length * 0.65 && latin < 8;
+}
+
+function envLogText(message, tail) {
+  const msg = String(message || "").replace(/\u0000/g, "").trim();
+  const raw = String(tail || "").replace(/\u0000/g, "");
+  const junk =
+    envLogLooksGarbled(raw) || /wsl\.exe --install|aka\.ms\/wslinstall/i.test(raw);
+  const clean = junk ? "" : raw.trim();
+  if (msg && clean) return msg + "\n\n" + clean;
+  if (msg && junk) return msg + "\n\n（安装日志编码无法显示，请看上方三项状态。）";
+  return msg || clean || "部署未完成。请再点「部署到本机」。";
+}
+
+function setCheckItem(id, ok, text, pending) {
   const el = $(id);
   if (!el) return;
-  el.className = "check-item " + (ok ? "ok" : "bad");
-  el.querySelector(".dot").textContent = ok ? "✓" : "·";
+  const state = pending ? "pending" : ok ? "ok" : "bad";
+  el.className = "check-item " + state;
+  el.querySelector(".dot").textContent = pending ? "…" : ok ? "✓" : "·";
   const p = el.querySelector("p");
   if (p) p.textContent = text;
 }
@@ -609,6 +651,12 @@ function setStatusItem(id, { ok, warn, label }) {
   }
 }
 
+function paintEnvPill(readiness) {
+  const r = readiness || {};
+  const ready = !!r.environment_ready && !r.deploying;
+  setStatusItem("status-soft", { ok: ready, warn: !ready, label: "环境" });
+}
+
 async function refreshStatusPill() {
   const pill = $("status-pill");
   if (!pill) return;
@@ -618,12 +666,9 @@ async function refreshStatusPill() {
     const llmOk = !!(st.llm && st.llm.ok) || !!settings.api_key_set || !!settings.llm_api_key_set;
     const lic = st.license || {};
     const licOk = !!lic.activated;
-    const ready =
-      (st.deploy && st.deploy.readiness && st.deploy.readiness.environment_ready) ||
-      (st.deploy && st.deploy.dftb && st.deploy.dftb.status === "ok");
     setStatusItem("status-login", { ok: licOk, warn: !licOk, label: licOk ? "已登录" : "未登录" });
     setStatusItem("status-llm", { ok: llmOk, warn: !llmOk, label: "AI" });
-    setStatusItem("status-soft", { ok: ready, warn: !ready, label: "环境" });
+    paintEnvPill((st.deploy && st.deploy.readiness) || {});
     pill.className = "status-pill " + (licOk ? "ok" : "warn");
   } catch (e) {
     setStatusItem("status-login", { ok: false, warn: true, label: "未连接" });
@@ -905,6 +950,8 @@ async function runLessonRecipe(lessonId) {
     applyLessonContext(data);
     if (data.project_id) currentProjectId = data.project_id;
     if (data.preview && data.preview.hsd_preview) {
+      hsdUserOwned = false;
+      hsdUploadName = "";
       const mp = data.preview.mp || {};
       const mat = data.preview.maturity || {};
       const allowSubmit = data.preview.allow_submit !== false;
@@ -968,14 +1015,18 @@ async function loadExamples() {
 
 async function sendChat(confirm) {
   const message = $("chat-input").value.trim();
+  const hsd = getEditedHsd();
   if (!message && !confirm) return;
+  if (confirm && !hsd) {
+    addBubble("请先点「生成输入」，或上传自己的 HSD 输入文件。", "bot");
+    return;
+  }
   // 非确认：走生成进度条；确认投递后用作业进度区，不再推进生成进度条
   if (!confirm) {
     await previewOnly({ quiet: false });
     return;
   }
   const st = structPayload();
-  const hsd = getEditedHsd();
   const submitBtn = $("btn-submit");
   setBusyButton(submitBtn, true, "投递中…", "确认计算");
   showJobProgress("pending", "正在投递本机作业…", "");
@@ -983,12 +1034,13 @@ async function sendChat(confirm) {
     const data = await api("/api/chat", {
       method: "POST",
       body: JSON.stringify({
-        message: message || "确认计算",
+        message: message || (hsdUserOwned ? "使用自写输入文件" : "确认计算"),
         project_id: currentProjectId || "",
         confirm_submit: true,
         poscar: st.poscar || "",
         gen: st.gen || "",
         hsd: hsd || "",
+        user_hsd: !!hsdUserOwned,
         family: courseHints.family || "",
         kind: courseHints.kind || "",
       }),
@@ -1009,11 +1061,20 @@ async function sendChat(confirm) {
         if (pid) taskDetailCache.delete(pid);
         await loadProjects();
         if (pid) {
+          await ensureListedProject(pid);
           await showProject(pid, { force: true });
           startTaskWatch(pid);
         }
       } catch (_) {
-        /* ignore */
+        try {
+          if (pid) {
+            await ensureListedProject(pid);
+            await showProject(pid, { force: true });
+            startTaskWatch(pid);
+          }
+        } catch (__) {
+          /* 列表失败时仍尽量把当前作业挂上 */
+        }
       }
       pollProject(pid, jid);
     } else if (data.ok === false) {
@@ -1039,6 +1100,8 @@ function resetPreviewOutputs() {
   hideJobProgress();
   if ($("btn-submit")) $("btn-submit").disabled = true;
   hsdDefaultText = "";
+  hsdUserOwned = false;
+  hsdUploadName = "";
 }
 
 async function previewOnly(opts) {
@@ -1047,6 +1110,7 @@ async function previewOnly(opts) {
   const fresh = !!options.fresh;
   const message = ($("chat-input").value || "").trim();
   if (!message) return;
+  if (autoPreviewBusy) return;
   // 主动发起的新计算：新开任务，避免沿用上一作业的 project / 结构残留
   const startNew = !quiet || fresh;
   let st = structPayload();
@@ -1065,7 +1129,6 @@ async function previewOnly(opts) {
   }
   const key = message + "||" + (st.poscar || st.gen || "") + "||" + (courseHints.kind || "");
   if (quiet && key === lastAutoPreviewKey) return;
-  if (autoPreviewBusy) return;
   autoPreviewBusy = true;
   if (!quiet) addBubble(message, "user");
   try {
@@ -1108,6 +1171,8 @@ async function previewOnly(opts) {
       return;
     }
     if (data.preview && data.preview.hsd_preview) {
+      hsdUserOwned = false;
+      hsdUploadName = "";
       const mp = data.preview.mp || {};
       const mat = data.preview.maturity || {};
       const allowSubmit = data.preview.allow_submit !== false;
@@ -1152,6 +1217,7 @@ async function previewOnly(opts) {
 }
 
 function scheduleAutoPreview() {
+  if (hsdUserOwned) return;
   if (autoPreviewTimer) clearTimeout(autoPreviewTimer);
   autoPreviewTimer = setTimeout(() => {
     const msg = ($("chat-input").value || "").trim();
@@ -1202,7 +1268,10 @@ if (btnRestoreHsd) {
     if (!hsdDefaultText) return;
     showHsdPreview(hsdDefaultText, "已恢复推荐默认 · 可继续编辑");
     if ($("btn-submit")) $("btn-submit").disabled = false;
-    addBubble("已恢复本次预览生成的推荐 HSD。", "bot");
+    addBubble(
+      hsdUserOwned ? "已恢复你上传的输入文件原文。" : "已恢复本次预览生成的推荐 HSD。",
+      "bot"
+    );
   });
 }
 
@@ -1214,10 +1283,22 @@ function looksLikePoscar(text) {
 }
 
 function looksLikeGen(text) {
-  const t = (text || "").trim();
+  const t = (text || "").replace(/^\uFEFF/, "").trim();
   if (!t) return false;
   const first = t.split(/\r?\n/)[0] || "";
-  return /^\s*\d+\s+[CSF]/i.test(first);
+  return /^\s*\d+\s+[CSFcfs]\b/.test(first);
+}
+
+function looksLikeHsd(text) {
+  const t = (text || "").trim();
+  if (!t) return false;
+  return /Hamiltonian\s*=|Geometry\s*=|Driver\s*=|ParserOptions|MaxAngularMomentum|SlaterKosterFiles/i.test(
+    t
+  );
+}
+
+function hsdReferencesStructureFile(text) {
+  return /Geometry\s*=\s*\w+\s*\{[^}]*<<</i.test(text || "");
 }
 
 /** 轻微后略转视角，避免平面分子沿默认 z 向投影重叠（如旧版 H2O）。 */
@@ -1239,22 +1320,23 @@ function applyMolViewerCamera(viewer) {
   }
 }
 
-function genToXyz(text) {
-  // DFTB+ GenFormat：N Mode → 元素行 → N 行原子 →（S/F 时）原点 + 3 晶格向量
-  const lines = (text || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (lines.length < 2) return "";
-  const head = lines[0].split(/\s+/);
+function parseGen(text) {
+  // DFTB+ GenFormat：N C|S|F → 元素 → N 行原子 →（S/F）原点 + 3 晶格向量
+  const lines = (text || "")
+    .replace(/^\uFEFF/, "")
+    .split(/\r?\n/)
+    .map((l) => l.trim())
+    .filter(Boolean);
+  if (lines.length < 2) return null;
+  const head = lines[0].split(/\s+/).filter(Boolean);
   const n = parseInt(head[0], 10);
-  if (!n || n < 1) return "";
-  const mode = (head[1] || "C").toUpperCase();
+  if (!n || n < 1) return null;
+  const mode = (head[1] || "C").toUpperCase().slice(0, 1);
   let idx = 1;
-  const speciesLine = lines[idx++] || "";
-  const species = speciesLine.split(/\s+/).filter(Boolean);
-
+  const species = (lines[idx++] || "").split(/\s+/).filter(Boolean);
   const coords = [];
   for (let i = 0; i < n && idx < lines.length; i++, idx++) {
-    const parts = lines[idx].split(/\s+/);
-    // DFTB+ GEN：atomIndex speciesIndex x y z
+    const parts = lines[idx].split(/\s+/).filter(Boolean);
     let sp = "X";
     let x = NaN;
     let y = NaN;
@@ -1273,32 +1355,161 @@ function genToXyz(text) {
       continue;
     }
     if ([x, y, z].some((v) => Number.isNaN(v))) continue;
-    coords.push({ sp, x, y, z });
+    coords.push({ sp, x, y, z, fx: x, fy: y, fz: z });
   }
-
-  // 原子行之后才是原点与晶格（仅分数坐标 F 需要转换）
+  if (!coords.length) return null;
   let lattice = null;
-  if ((mode === "S" || mode === "F") && idx + 3 < lines.length) {
-    idx += 1; // origin
-    lattice = [lines[idx++], lines[idx++], lines[idx++]].map((row) =>
-      row.split(/\s+/).map(Number)
+  let origin = [0, 0, 0];
+  if ((mode === "S" || mode === "F") && lines.length - idx >= 4) {
+    origin = lines[idx++]
+      .split(/\s+/)
+      .map(Number)
+      .slice(0, 3);
+    lattice = [0, 1, 2].map(() =>
+      lines[idx++]
+        .split(/\s+/)
+        .map(Number)
+        .slice(0, 3)
     );
+    if (lattice.some((row) => row.length < 3 || row.some((v) => Number.isNaN(v)))) {
+      lattice = null;
+    }
   }
   if (lattice && mode === "F") {
     for (const c of coords) {
-      const { x, y, z } = c;
-      c.x = x * lattice[0][0] + y * lattice[1][0] + z * lattice[2][0];
-      c.y = x * lattice[0][1] + y * lattice[1][1] + z * lattice[2][1];
-      c.z = x * lattice[0][2] + y * lattice[1][2] + z * lattice[2][2];
+      const x = c.fx;
+      const y = c.fy;
+      const z = c.fz;
+      c.x = origin[0] + x * lattice[0][0] + y * lattice[1][0] + z * lattice[2][0];
+      c.y = origin[1] + x * lattice[0][1] + y * lattice[1][1] + z * lattice[2][1];
+      c.z = origin[2] + x * lattice[0][2] + y * lattice[1][2] + z * lattice[2][2];
+    }
+  } else if (lattice && mode === "S") {
+    for (const c of coords) {
+      c.x += origin[0] || 0;
+      c.y += origin[1] || 0;
+      c.z += origin[2] || 0;
     }
   }
+  return { n: coords.length, mode, species, coords, lattice, origin };
+}
 
-  if (!coords.length) return "";
-  let out = coords.length + "\nDFTB-NEU\n";
-  coords.forEach((c) => {
+function genFormula(parsed) {
+  if (!parsed || !parsed.coords) return "";
+  const counts = {};
+  parsed.coords.forEach((c) => {
+    counts[c.sp] = (counts[c.sp] || 0) + 1;
+  });
+  const keys = Object.keys(counts);
+  let g = 0;
+  keys.forEach((s) => {
+    g = g ? gcdInt(g, counts[s]) : counts[s];
+  });
+  if (g < 1) g = 1;
+  return keys
+    .map((s) => {
+      const n = counts[s] / g;
+      return n > 1 ? s + n : s;
+    })
+    .join("");
+}
+
+function gcdInt(a, b) {
+  a = Math.abs(a);
+  b = Math.abs(b);
+  while (b) {
+    const t = b;
+    b = a % b;
+    a = t;
+  }
+  return a || 1;
+}
+
+function latticeConstant(row) {
+  if (!row || row.length < 3) return 0;
+  return Math.sqrt(row[0] * row[0] + row[1] * row[1] + row[2] * row[2]);
+}
+
+function genToXyz(text) {
+  const parsed = typeof text === "object" && text && text.coords ? text : parseGen(text);
+  if (!parsed) return "";
+  let out = parsed.coords.length + "\nDFTB-NEU\n";
+  parsed.coords.forEach((c) => {
     out += c.sp + " " + c.x + " " + c.y + " " + c.z + "\n";
   });
   return out;
+}
+
+function genToPoscar(text) {
+  const parsed = typeof text === "object" && text && text.coords ? text : parseGen(text);
+  if (!parsed || !parsed.lattice) return "";
+  const order = [];
+  const counts = {};
+  parsed.coords.forEach((c) => {
+    if (!counts[c.sp]) {
+      counts[c.sp] = 0;
+      order.push(c.sp);
+    }
+    counts[c.sp] += 1;
+  });
+  const formula = genFormula(parsed) || "GEN";
+  let out = formula + "\n1.0\n";
+  parsed.lattice.forEach((row) => {
+    out += row.map((x) => Number(x).toPrecision(12)).join("  ") + "\n";
+  });
+  out += order.join(" ") + "\n";
+  out += order.map((s) => counts[s]).join(" ") + "\n";
+  if (parsed.mode === "F") {
+    out += "Direct\n";
+    parsed.coords.forEach((c) => {
+      out += c.fx + " " + c.fy + " " + c.fz + "\n";
+    });
+  } else {
+    out += "Cartesian\n";
+    parsed.coords.forEach((c) => {
+      out += c.x + " " + c.y + " " + c.z + "\n";
+    });
+  }
+  return out;
+}
+
+function prepareStructureModel(text, kindHint) {
+  const raw = (text || "").trim();
+  if (!raw) return null;
+  if (looksLikeGen(raw) || kindHint === "gen") {
+    const parsed = parseGen(raw);
+    if (!parsed) return { error: "无法解析 GEN 结构" };
+    if (parsed.lattice) {
+      const poscar = genToPoscar(parsed);
+      if (!poscar) return { error: "无法解析 GEN 晶格" };
+      const a = latticeConstant(parsed.lattice[0]);
+      const replicate = parsed.coords.length <= 32 ? 2 : 0;
+      const bits = [genFormula(parsed) || "GEN", parsed.coords.length + " 原子"];
+      if (parsed.mode === "F") bits.push("分数坐标");
+      if (a > 0.2) bits.push("a=" + a.toFixed(2) + " Å");
+      if (replicate) bits.push("显示 " + replicate + "×" + replicate + "×" + replicate);
+      bits.push("可拖拽旋转");
+      return { data: poscar, format: "vasp", parsed, replicate, caption: bits.join(" · ") };
+    }
+    return {
+      data: genToXyz(parsed),
+      format: "xyz",
+      parsed,
+      replicate: 0,
+      caption: (genFormula(parsed) || "结构") + " · 分子 · 可拖拽旋转",
+    };
+  }
+  if (looksLikePoscar(raw) || kindHint === "poscar") {
+    return { data: raw, format: "vasp", replicate: 0, caption: "POSCAR · 球棍模型 · 可拖拽旋转" };
+  }
+  return { data: raw, format: "xyz", replicate: 0, caption: "结构 · 球棍模型 · 可拖拽旋转" };
+}
+
+function molViewerStyle() {
+  return {
+    stick: { radius: 0.12, colorscheme: "Jmol" },
+    sphere: { scale: 0.22, colorscheme: "Jmol" },
+  };
 }
 
 function renderStructureViewer(which, textOverride, kindOverride) {
@@ -1319,25 +1530,14 @@ function renderStructureViewer(which, textOverride, kindOverride) {
     return;
   }
   wrap.hidden = false;
-  let format = "xyz";
-  let data = text;
-  const kind = kindOverride || structureKind;
-  if (kind === "poscar" || looksLikePoscar(text)) {
-    format = "vasp";
-    data = text;
-  } else if (kind === "gen" || looksLikeGen(text)) {
-    format = "xyz";
-    data = genToXyz(text);
-    if (!data) {
-      el.innerHTML = "<p class='muted-inline'>无法解析 GEN 结构</p>";
-      return;
-    }
-  } else if (looksLikePoscar(text)) {
-    format = "vasp";
-  } else {
-    data = genToXyz(text) || text;
-    format = data.split("\n").length > 2 && /^\d+/.test(data) ? "xyz" : "xyz";
+  const prepared = prepareStructureModel(text, kindOverride || structureKind);
+  if (!prepared || prepared.error) {
+    el.innerHTML = "<p class='muted-inline'>" + ((prepared && prepared.error) || "无法解析结构") + "</p>";
+    if (caption) caption.textContent = "";
+    return;
   }
+  const format = prepared.format;
+  const data = prepared.data;
   try {
     el.innerHTML = "";
     const viewer = $3Dmol.createViewer(el, {
@@ -1345,13 +1545,14 @@ function renderStructureViewer(which, textOverride, kindOverride) {
       antialias: true,
     });
     viewer.addModel(data, format);
-    viewer.setStyle(
-      {},
-      {
-        stick: { radius: 0.14, colorscheme: "Jmol" },
-        sphere: { scale: 0.32, colorscheme: "Jmol" },
+    if (prepared.replicate && format === "vasp") {
+      try {
+        viewer.replicateUnitCell(prepared.replicate, prepared.replicate, prepared.replicate);
+      } catch (_) {
+        /* optional */
       }
-    );
+    }
+    viewer.setStyle({}, molViewerStyle());
     try {
       if (format === "vasp") viewer.addUnitCell({ box: { color: "0x6a7d89" } });
     } catch (_) {
@@ -1359,12 +1560,7 @@ function renderStructureViewer(which, textOverride, kindOverride) {
     }
     applyMolViewerCamera(viewer);
     structViewers[isTask ? "task" : "calc"] = viewer;
-    if (caption) {
-      caption.textContent =
-        format === "vasp"
-          ? "POSCAR · 球棍模型 · 可拖拽旋转"
-          : "结构 · 球棍模型 · 可拖拽旋转";
-    }
+    if (caption) caption.textContent = prepared.caption || "结构 · 球棍模型 · 可拖拽旋转";
     setTimeout(() => {
       try {
         viewer.resize();
@@ -2094,17 +2290,23 @@ const KIND_TD = new Set(["dftb_td", "dftb_td_relax"]);
 const KIND_VIB = new Set(["dftb_vib"]);
 const KIND_MD = new Set(["dftb_md", "dftb_md_anneal", "dftb_ehrenfest"]);
 
-function kindFlags(kind) {
+function kindFlags(kind, protocol) {
   const k = String(kind || "").toLowerCase();
+  const stages = (protocol && (protocol.stages || (protocol.params && protocol.params.stages))) || [];
+  const pre = !!(
+    (protocol && protocol.params && protocol.params.pre_relax) ||
+    (Array.isArray(stages) && stages.indexOf("opt") >= 0)
+  );
   return {
     kind: k,
     fermi: KIND_ELECTRONIC.has(k),
     band: KIND_BAND.has(k),
-    opt: KIND_OPT.has(k),
+    opt: KIND_OPT.has(k) || pre,
     td: KIND_TD.has(k),
     vib: KIND_VIB.has(k),
     md: KIND_MD.has(k),
-    structCompare: KIND_OPT.has(k),
+    structCompare: KIND_OPT.has(k) || pre,
+    stages: Array.isArray(stages) ? stages : [],
   };
 }
 
@@ -2119,17 +2321,10 @@ function renderIntoMolViewer(el, text, kindHint) {
     el.innerHTML = "<p class='muted-inline'>结构可视化库未加载</p>";
     return;
   }
-  let format = "xyz";
-  let data = raw;
-  if (kindHint === "poscar" || looksLikePoscar(raw)) {
-    format = "vasp";
-  } else if (kindHint === "gen" || looksLikeGen(raw)) {
-    data = genToXyz(raw);
-    format = "xyz";
-    if (!data) {
-      el.innerHTML = "<p class='muted-inline'>无法解析 GEN</p>";
-      return;
-    }
+  const prepared = prepareStructureModel(raw, kindHint);
+  if (!prepared || prepared.error) {
+    el.innerHTML = "<p class='muted-inline'>" + ((prepared && prepared.error) || "无法解析 GEN") + "</p>";
+    return;
   }
   try {
     el.innerHTML = "";
@@ -2137,16 +2332,17 @@ function renderIntoMolViewer(el, text, kindHint) {
       backgroundColor: "#f4f7f8",
       antialias: true,
     });
-    viewer.addModel(data, format);
-    viewer.setStyle(
-      {},
-      {
-        stick: { radius: 0.14, colorscheme: "Jmol" },
-        sphere: { scale: 0.32, colorscheme: "Jmol" },
+    viewer.addModel(prepared.data, prepared.format);
+    if (prepared.replicate && prepared.format === "vasp") {
+      try {
+        viewer.replicateUnitCell(prepared.replicate, prepared.replicate, prepared.replicate);
+      } catch (_) {
+        /* optional */
       }
-    );
+    }
+    viewer.setStyle({}, molViewerStyle());
     try {
-      if (format === "vasp") viewer.addUnitCell({ box: { color: "0x6a7d89" } });
+      if (prepared.format === "vasp") viewer.addUnitCell({ box: { color: "0x6a7d89" } });
     } catch (_) {
       /* optional */
     }
@@ -2167,7 +2363,7 @@ function renderIntoMolViewer(el, text, kindHint) {
 async function renderTaskStructureCompare(protocol, lecture) {
   const box = $("task-struct-compare");
   if (!box) return;
-  const flags = kindFlags(protocol && protocol.kind);
+  const flags = kindFlags(protocol && protocol.kind, protocol);
   const want =
     flags.structCompare ||
     !!(lecture && lecture.show_structure_compare);
@@ -2235,7 +2431,7 @@ function renderAnalysis(full, poll) {
   const job = proj.job || full.job || {};
   const lecture = (poll && poll.lecture) || null;
   const phase = proj.phase || full.phase || "";
-  const flags = kindFlags(protocol.kind);
+  const flags = kindFlags(protocol.kind, protocol);
   renderLecture(lecture);
   renderTaskStructureCompare(protocol, lecture).catch(() => {});
 
@@ -2271,6 +2467,21 @@ function renderAnalysis(full, poll) {
     ["任务类型", protocol.kind || "—"],
     ["SK 参数集", protocol.sk_set || "—"],
   ];
+  const stageZh = {
+    opt: "几何优化",
+    band: "能带与带隙",
+    dos: "态密度",
+    defect: "缺陷电子结构",
+    vib: "振动频率",
+    td: "吸收光谱",
+    md: "分子动力学",
+    md_anneal: "退火 MD",
+    scc: "SCC 单点",
+  };
+  const stages = flags.stages || protocol.stages || [];
+  if (stages.length) {
+    items.push(["计算阶段", stages.map((s) => stageZh[s] || s).join(" → ")]);
+  }
   if (energy != null && energy !== "") {
     items.push([
       "总能量 (eV)",
@@ -2586,39 +2797,101 @@ function appendProjectListItem(p) {
   return li;
 }
 
+function projectJobId(p) {
+  if (!p) return "";
+  const job = p.job || {};
+  return String(
+    job.job_id || (p.protocol && p.protocol.job_id) || p.protocol_job_id || ""
+  ).trim();
+}
+
 function isSubmittedProject(p) {
   // 任务页：已投递的都显示（含排队/计算中）；未点「确认计算」的「方案就绪」不进列表
   if (!p) return false;
+  if (projectJobId(p)) return true;
   const job = p.job || {};
-  const jid = job.job_id || (p.protocol && p.protocol.job_id);
-  if (jid) return true;
   const ph = String(p.phase || "").toLowerCase();
   const st = String(job.status || "").toLowerCase();
   if (["pending", "running", "done", "error", "cancelled"].includes(st)) return true;
   return ["running", "analyzed", "manuscript", "error", "cancelled"].includes(ph);
 }
 
-async function loadProjects() {
-  const data = await api("/api/projects");
+function setProjectListHint(kind, text) {
+  const emptyEl = $("project-list-empty");
+  const errEl = $("project-list-error");
+  if (emptyEl) emptyEl.hidden = kind !== "empty";
+  if (errEl) {
+    errEl.hidden = kind !== "error";
+    errEl.textContent = text || "";
+  }
+}
+
+async function ensureListedProject(id) {
+  if (!id) return null;
   const ul = $("project-list");
+  if (ul && ul.querySelector('.project-item[data-id="' + id + '"]')) return id;
+  try {
+    const full = await api("/api/projects/" + id);
+    const proj = full.project || full;
+    if (!proj || !proj.id) return null;
+    const proto = proj.protocol || {};
+    const summary = {
+      id: proj.id,
+      title: proj.title,
+      phase: proj.phase,
+      job: proj.job || null,
+      protocol: { job_id: proto.job_id, kind: proto.kind },
+      protocol_job_id: proto.job_id || "",
+    };
+    if (!isSubmittedProject(summary) && !projectJobId(summary)) return null;
+    if (ul && !ul.querySelector('.project-item[data-id="' + proj.id + '"]')) {
+      appendProjectListItem(summary);
+    }
+    setProjectListHint("", "");
+    return proj.id;
+  } catch (_) {
+    return null;
+  }
+}
+
+async function loadProjects() {
+  const ul = $("project-list");
+  if (!ul) return;
   const keepId = currentProjectId;
-  // 重建列表前先存下当前展开任务，重建后按缓存恢复（不闪「加载中」）
   stashCurrentTaskDetail();
   parkProjectDetail();
+  setProjectListHint("", "");
+  let listed = [];
+  try {
+    const data = await api("/api/projects");
+    listed = (data.projects || []).filter(isSubmittedProject);
+  } catch (e) {
+    ul.innerHTML = "";
+    setProjectListHint("error", asDisplayText(e && e.message, "无法加载任务列表，请点刷新或重新打开「任务」。"));
+    if (keepId) await ensureListedProject(keepId);
+    if (keepId && ul.querySelector('.project-item[data-id="' + keepId + '"]')) {
+      await showProject(keepId, { silent: true });
+    }
+    return;
+  }
   ul.innerHTML = "";
-  const listed = (data.projects || []).filter(isSubmittedProject);
   listed.forEach((p) => appendProjectListItem(p));
-  // 清理已不存在的任务缓存
-  const alive = new Set(listed.map((p) => p.id));
+  if (keepId && !ul.querySelector('.project-item[data-id="' + keepId + '"]')) {
+    await ensureListedProject(keepId);
+  }
+  const alive = new Set(
+    Array.from(ul.querySelectorAll(".project-item")).map((el) => el.dataset.id)
+  );
   Array.from(taskDetailCache.keys()).forEach((k) => {
     if (typeof k === "string" && !alive.has(k)) taskDetailCache.delete(k);
   });
-  // 仅当当前任务已在列表中（已投递）时才展开；方案就绪阶段不跳转/不展开
   if (keepId && ul.querySelector('.project-item[data-id="' + keepId + '"]')) {
     await showProject(keepId, { silent: true });
   } else if (keepId && !alive.has(keepId)) {
-    // 仍在计算页编辑的方案：保留 currentProjectId，但不在任务页展开
     stopTaskWatch();
+  }
+  if (!ul.querySelector(".project-item")) {
+    setProjectListHint("empty");
   }
 }
 
@@ -2833,40 +3106,133 @@ function deployActionLabel(readiness) {
   return "重新部署";
 }
 
+let deployBusy = false;
+let deployClockTimer = null;
+let deployStartedAt = 0;
+let deployLastBase = "";
+
+function lockDeployUi(label) {
+  deployBusy = true;
+  const btn = $("btn-deploy");
+  if (!btn) return;
+  btn.disabled = true;
+  btn.classList.add("is-busy");
+  btn.textContent = label || "正在部署…";
+  btn.setAttribute("aria-busy", "true");
+}
+
+function unlockDeployUi(readiness) {
+  deployBusy = false;
+  if (deployClockTimer) {
+    clearInterval(deployClockTimer);
+    deployClockTimer = null;
+  }
+  const btn = $("btn-deploy");
+  if (!btn) return;
+  btn.disabled = false;
+  btn.classList.remove("is-busy");
+  btn.removeAttribute("aria-busy");
+  btn.textContent = deployActionLabel(readiness);
+}
+
 function updateDeployButton(readiness) {
+  if (deployBusy) return;
   const btn = $("btn-deploy");
   if (!btn || btn.disabled) return;
   btn.textContent = deployActionLabel(readiness);
+}
+
+function stripDeployClock(s) {
+  return String(s || "").replace(/（已用 \d+ 分 \d+ 秒[^）]*）/g, "").trim();
+}
+
+function paintDeployClock() {
+  const log = $("deploy-log");
+  if (!log) return;
+  const started = deployStartedAt || Date.now();
+  const sec = Math.max(0, Math.floor((Date.now() - started) / 1000));
+  const base = stripDeployClock(deployLastBase) || "正在部署";
+  log.textContent = `${base}（已用 ${Math.floor(sec / 60)} 分 ${sec % 60} 秒，请勿关闭软件）`;
+}
+
+function syncDeployLog(readiness) {
+  if (deployBusy) return;
+  const log = $("deploy-log");
+  if (!log) return;
+  const r = readiness || {};
+  if (r.environment_ready) {
+    log.textContent = "";
+    return;
+  }
+  if (/部署完成|安装失败|瀹夎|澶辫触|å®è£|å¤±è´¥/.test(log.textContent || "")) {
+    log.textContent = "";
+  }
+}
+
+function startDeployClock(base, startedAt) {
+  deployLastBase = stripDeployClock(base) || "正在部署";
+  deployStartedAt = startedAt || Date.now();
+  if (deployClockTimer) clearInterval(deployClockTimer);
+  paintDeployClock();
+  deployClockTimer = setInterval(paintDeployClock, 1000);
 }
 
 async function refreshDeploy() {
   const st = await api("/api/deploy/status");
   const w = st.wsl || {};
   const r = st.readiness || {};
+  const deploying = !!r.deploying;
+  const phase = String(r.deploy_phase || "");
   const wslOk = !!r.wsl_ok;
-  const dftbOk = !!r.dftb_ok;
-  const smokeOk = !!r.smoke_ok;
+  const dftbOk = !!r.dftb_ok && !deploying;
+  const smokeOk = !!r.smoke_ok && !deploying;
+  const wslPending = deploying && (phase === "wsl" || phase === "ubuntu") && !wslOk;
+  const dftbPending = deploying && (phase === "ubuntu" || phase === "dftb" || phase === "wsl");
+  const smokePending = deploying;
   setCheckItem(
     "chk-wsl",
-    wslOk,
-    wslOk ? w.message || "就绪" : w.message || "未就绪"
+    wslOk && !wslPending,
+    wslPending
+      ? "正在准备"
+      : wslOk
+        ? envCardText(w.message || "", "已检测到 WSL")
+        : envCardText(w.message || "", r.needs_reboot ? "需先重启电脑" : "未就绪"),
+    wslPending
   );
   setCheckItem(
     "chk-dftb",
     dftbOk,
-    dftbOk ? "已安装并可探测" : (st.dftb && st.dftb.message) || "未安装"
+    dftbPending
+      ? phase === "dftb"
+        ? "正在安装"
+        : "等待安装"
+      : dftbOk
+        ? "已安装并可探测"
+        : envCardText((st.dftb && st.dftb.message) || "", "尚未安装"),
+    dftbPending
   );
   setCheckItem(
     "chk-smoke",
     smokeOk,
-    (st.smoke && st.smoke.message) || (smokeOk ? "通过" : "未通过")
+    smokePending
+      ? "等待测试校验"
+      : (st.smoke && st.smoke.message) || (smokeOk ? "通过" : "未通过"),
+    smokePending
   );
   const summary = $("deploy-summary");
   if (summary) {
-    summary.textContent = r.summary || "—";
-    summary.className = "callout" + (r.environment_ready ? " ok-callout" : "");
+    if (deploying) {
+      summary.hidden = true;
+    } else {
+      summary.hidden = false;
+      summary.textContent = r.summary || "—";
+      summary.className =
+        "callout" + (r.environment_ready ? " ok-callout" : r.needs_reboot ? " warn-callout" : "");
+    }
   }
   updateDeployButton(r);
+  syncDeployLog(r);
+  paintEnvPill(r);
   const diagEl = $("deploy-diag");
   const diagObj = {
     readiness: r,
@@ -2882,13 +3248,15 @@ async function refreshDeploy() {
 const btnRefreshDeploy = $("btn-refresh-deploy");
 if (btnRefreshDeploy) {
   btnRefreshDeploy.addEventListener("click", async () => {
+    if (deployBusy) return;
     const idle = "刷新";
     setBusyButton(btnRefreshDeploy, true, "刷新中…", idle);
     try {
       const st = await refreshDeploy();
       const r = (st && st.readiness) || {};
       const summary = $("deploy-summary");
-      if (summary && r.summary) {
+      if (summary && r.summary && !r.deploying) {
+        summary.hidden = false;
         summary.textContent = r.summary + "（已刷新）";
       }
     } catch (e) {
@@ -2902,70 +3270,207 @@ if (btnRefreshDeploy) {
     }
   });
 }
-$("btn-deploy").addEventListener("click", async () => {
-  const btn = $("btn-deploy");
-  btn.disabled = true;
-  const log = $("deploy-log");
+async function fetchDeployProgress() {
+  const r = await fetch(API + "/api/deploy/progress", {
+    headers: { "Content-Type": "application/json" },
+  });
+  if (!r.ok) return null;
+  return r.json();
+}
+
+async function resumeDeployIfRunning() {
+  if (deployBusy) return;
+  let p = null;
   try {
-    log.textContent = "正在检查环境…";
-    let st = await refreshDeploy();
+    p = await fetchDeployProgress();
+  } catch (_) {
+    return;
+  }
+  if (!p || !p.running) return;
+  lockDeployUi("正在部署…");
+  deployLastBase = stripDeployClock(p.message) || "正在部署";
+  deployStartedAt = p.started_at ? p.started_at * 1000 : Date.now();
+  startDeployClock(deployLastBase, deployStartedAt);
+  try {
+    const data = await waitDeployJob();
+    const log = $("deploy-log");
+    if (log) log.textContent = envLogText(data && data.message, data && data.log_tail);
+    const st = await refreshDeploy().catch(() => null);
+    unlockDeployUi((st && st.readiness) || {});
+  } catch (_) {
+    unlockDeployUi({});
+  }
+}
+
+async function waitDeployJob() {
+  const deadline = Date.now() + 40 * 60 * 1000;
+  let data = null;
+  let ticks = 0;
+  while (Date.now() < deadline) {
+    await sleep(1000);
+    ticks += 1;
+    let p = null;
+    try {
+      p = await fetchDeployProgress();
+    } catch (_) {
+      paintDeployClock();
+      continue;
+    }
+    if (p && (p.message || p.log)) {
+      deployLastBase = envLogText(stripDeployClock(p.message), p.log);
+      if (p.started_at) deployStartedAt = p.started_at * 1000;
+    }
+    paintDeployClock();
+    if (ticks % 5 === 0) {
+      refreshDeploy().catch(() => {});
+    }
+    if (p && p.running === false) {
+      data = p.result || { ok: false, message: stripDeployClock(p.message) || "部署未完成" };
+      break;
+    }
+  }
+  return data;
+}
+
+$("btn-deploy").addEventListener("click", async () => {
+  if (deployBusy) return;
+    const log = $("deploy-log");
+  if (log) log.textContent = "";
+  lockDeployUi("正在部署…");
+  startDeployClock("正在检查环境…");
+  try {
+    let st = null;
+    try {
+      st = await refreshDeploy();
+    } catch (_) {
+      /* 探测失败不挡部署 */
+    }
     let w = (st && st.wsl) || {};
     let r = (st && st.readiness) || {};
-    let elevatedHere = false;
     const action = deployActionLabel(r);
 
-    if (w.wsl_required && !w.ready_for_deploy) {
-      log.textContent = "正在启用 WSL2（请在弹出的管理员确认框中允许）…";
+    if (w.wsl_required && w.wsl_available === false) {
+      deployLastBase = "正在启用 WSL（请在弹出的管理员确认框中允许）";
+      paintDeployClock();
       if (window.dftbNeu && typeof window.dftbNeu.ensureWsl === "function") {
         const elev = await window.dftbNeu.ensureWsl();
-        elevatedHere = true;
         if (!elev || !elev.ok) {
-          log.textContent = (elev && elev.message) || "未能启动 WSL 安装。";
+          log.textContent = (elev && elev.message) || "未能启用 WSL。请再点「部署到本机」，并允许管理员确认。";
           return;
         }
-        log.textContent = (elev.message || "已请求启用 WSL2。") + "\n等待发行版就绪…";
       }
-
-      const deadline = Date.now() + 120000;
+      const deadline = Date.now() + 90000;
       while (Date.now() < deadline) {
         await sleep(5000);
         st = await refreshDeploy();
         w = (st && st.wsl) || {};
-        if (w.ready_for_deploy) break;
-        log.textContent =
-          "等待 WSL / Ubuntu 就绪…\n" +
-          (w.message || "") +
-          "\n若系统要求重启，请重启后再次点击「部署到本机」。";
+        if (w.wsl_available) break;
+        deployLastBase = "已请求启用 WSL。若系统提示重启，请重启后再点「部署到本机」";
+        paintDeployClock();
       }
-
-      if (!w.ready_for_deploy && elevatedHere) {
-        log.textContent =
-          "已启动 WSL2 安装。若系统提示重启，请重启后再次点击「部署到本机」；" +
-          "否则稍候再点一次即可继续安装 DFTB+。\n\n" +
-          (w.message || "");
+      if (!w.wsl_available) {
+        log.textContent = "WSL 功能尚未就绪。若系统提示重启，请重启后再点「部署到本机」。";
         return;
       }
     }
 
-    if (action === "测试校验") {
-      log.textContent = "正在运行测试校验…";
-    } else if (action === "安装 DFTB+") {
-      log.textContent = "正在安装 DFTB+（可能需数分钟）…";
-    } else {
-      log.textContent = "正在部署（可能需数分钟）…";
-    }
-    const data = await api("/api/deploy/run", {
+    if (action === "测试校验") deployLastBase = "正在运行测试校验";
+    else if (action === "安装 DFTB+") deployLastBase = "正在安装 DFTB+，大约需要几分钟";
+    else deployLastBase = "正在部署：从国内镜像安装 Ubuntu，再安装 DFTB+";
+    paintDeployClock();
+
+    const start = await api("/api/deploy/run", {
       method: "POST",
-      body: JSON.stringify({ ensure_wsl: !elevatedHere }),
+      body: JSON.stringify({ ensure_wsl: true }),
     });
-    log.textContent = (data.message || "") + "\n\n" + (data.log_tail || "");
-    await refreshDeploy();
+
+    let data = start;
+    if (start && (start.started || start.running) && start.running !== false) {
+      data = (await waitDeployJob()) || start;
+    }
+
+    if (data && data.needs_wsl_feature && window.dftbNeu && typeof window.dftbNeu.ensureWsl === "function") {
+      log.textContent = data.message || "需要先启用 WSL。请在管理员确认框中点「是」。";
+      const elev = await window.dftbNeu.ensureWsl();
+      if (!elev || !elev.ok) {
+        if (deployClockTimer) {
+          clearInterval(deployClockTimer);
+          deployClockTimer = null;
+        }
+        log.textContent =
+          (elev && elev.message) || "未能启用 WSL。请再点「部署到本机」，并允许管理员确认。";
+        return;
+      }
+      await sleep(3000);
+      st = await refreshDeploy().catch(() => null);
+      w = (st && st.wsl) || {};
+      r = (st && st.readiness) || {};
+      if (w.wsl2_ready === false && r.needs_reboot) {
+        if (deployClockTimer) {
+          clearInterval(deployClockTimer);
+          deployClockTimer = null;
+        }
+        log.textContent =
+          (elev && elev.message) ||
+          "已请求启用 WSL2。请先重启电脑。重启后再打开本软件，点「部署到本机」。";
+        return;
+      }
+      deployLastBase = "WSL 已就绪，继续安装 Ubuntu 与 DFTB+";
+      paintDeployClock();
+      const start2 = await api("/api/deploy/run", {
+        method: "POST",
+        body: JSON.stringify({ ensure_wsl: true }),
+      });
+      data = start2;
+      if (start2 && (start2.started || start2.running) && start2.running !== false) {
+        data = (await waitDeployJob()) || start2;
+      }
+    }
+
+    if (deployClockTimer) {
+      clearInterval(deployClockTimer);
+      deployClockTimer = null;
+    }
+    const stAfter = await refreshDeploy().catch(() => null);
+    const readyAfter = !!(stAfter && stAfter.readiness && stAfter.readiness.environment_ready);
+    if (readyAfter) {
+      log.textContent = "";
+    } else {
+      log.textContent = envLogText(data && data.message, data && data.log_tail);
+    }
     await refreshStatusPill();
   } catch (e) {
+    try {
+      const p = await fetchDeployProgress();
+      if (p && p.running) {
+        deployLastBase = stripDeployClock(p.message) || "正在部署";
+        if (p.started_at) deployStartedAt = p.started_at * 1000;
+        const data = await waitDeployJob();
+        log.textContent = envLogText(data && data.message, data && data.log_tail);
+        return;
+      }
+    } catch (_) {
+      /* 进度读不到再报原错误 */
+    }
     log.textContent = e.message || String(e);
   } finally {
-    btn.disabled = false;
-    refreshDeploy().catch(() => {});
+    let still = false;
+    try {
+      const p = await fetchDeployProgress();
+      still = !!(p && p.running);
+    } catch (_) {
+      still = false;
+    }
+    if (!still) {
+      let readiness = {};
+      try {
+        const st = await refreshDeploy();
+        readiness = (st && st.readiness) || {};
+      } catch (_) {
+        /* ignore */
+      }
+      unlockDeployUi(readiness);
+    }
   }
 });
 
@@ -3077,11 +3582,71 @@ if (structFile) {
     if (!f) return;
     const text = await f.text();
     $("struct-text").value = text;
-    structureKind = f.name.toLowerCase().endsWith(".gen") ? "gen" : "poscar";
+    const lower = (f.name || "").toLowerCase();
+    if (lower.endsWith(".gen") || looksLikeGen(text)) structureKind = "gen";
+    else if (looksLikePoscar(text) || lower.endsWith(".vasp") || lower.endsWith(".poscar")) {
+      structureKind = "poscar";
+    } else {
+      structureKind = "poscar";
+    }
     structureUserOwned = true;
     renderStructureViewer("calc");
-    scheduleAutoPreview();
-    addBubble("已用上传结构覆盖；将按该结构重新生成输入文件。", "bot");
+    if (hsdUserOwned) {
+      addBubble("已上传结构。当前使用你上传的输入文件，不会重新生成。", "bot");
+    } else {
+      scheduleAutoPreview();
+      addBubble("已用上传结构覆盖；将按该结构重新生成输入文件。", "bot");
+    }
+  });
+}
+
+const hsdFile = $("hsd-file");
+if (hsdFile) {
+  hsdFile.addEventListener("change", async (ev) => {
+    const f = ev.target.files && ev.target.files[0];
+    ev.target.value = "";
+    if (!f) return;
+    if (f.size > 2 * 1024 * 1024) {
+      addBubble("输入文件过大（超过 2 MB），请检查是否选错文件。", "bot");
+      return;
+    }
+    let text = "";
+    try {
+      text = await f.text();
+    } catch (e) {
+      addBubble("无法读取该文件。", "bot");
+      return;
+    }
+    if (!text || !text.trim()) {
+      addBubble("这个文件是空的。", "bot");
+      return;
+    }
+    if (text.indexOf("\x00") >= 0) {
+      addBubble("这不像文本输入文件（HSD）。请上传 dftb_in.hsd 或 .txt。", "bot");
+      return;
+    }
+    const body = text.trim();
+    hsdUserOwned = true;
+    hsdUploadName = f.name || "dftb_in.hsd";
+    currentProjectId = "";
+    showHsdPreview(body, "来自上传 · " + hsdUploadName + " · 可编辑", {
+      defaultText: body,
+      tips: [
+        {
+          title: "自写输入",
+          text: "将按这份 HSD 原样投递。若其中引用了 geo.gen / POSCAR，请同时在下方上传结构。",
+        },
+      ],
+    });
+    setCalcProgress("ready", "已载入你上传的输入文件，可编辑后点击下方「确认计算」。");
+    let note = "已载入输入文件「" + hsdUploadName + "」。核对后可直接确认计算。";
+    if (!looksLikeHsd(body)) {
+      note += " 内容不太像标准 HSD，请再看一眼。";
+    }
+    if (hsdReferencesStructureFile(body) && !structPayload().poscar && !structPayload().gen) {
+      note += " 这份输入引用了结构文件，请在下方「结构」上传 POSCAR 或 GEN。";
+    }
+    addBubble(note, "bot");
   });
 }
 

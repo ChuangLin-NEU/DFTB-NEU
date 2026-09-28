@@ -1,0 +1,48 @@
+Geometry = GenFormat {
+  <<< "geo.gen"
+}
+
+Hamiltonian = DFTB {
+  SCC = Yes
+  SCCTolerance = 1.0E-6
+  MaxAngularMomentum = {
+    Si = "p"
+  }
+  SlaterKosterFiles = Type2FileNames {
+    Prefix = "$HOME/.dftb-neu/share/dftb/sk/pbc/"
+    Separator = "-"
+    Suffix = ".skf"
+  }
+  Filling = Fermi {
+    Temperature [K] = 300.0
+  }
+  KPointsAndWeights = SupercellFolding {
+    8 0 0
+    0 8 0
+    0 0 8
+    0.0 0.0 0.0
+  }
+}
+
+Driver = {}
+
+Analysis = {
+  ProjectStates = {}
+  BandStructure = {
+    KPointsAndWeights = Klines {
+      1  0.000000  0.000000  0.000000    # G
+      20  0.500000  0.000000  0.500000    # X
+      20  0.500000  0.250000  0.750000    # W
+      20  0.375000  0.375000  0.750000    # K
+      20  0.000000  0.000000  0.000000    # G
+      20  0.500000  0.500000  0.500000    # L
+    }
+  }
+}
+
+Options = {
+  WriteDetailedOut = Yes
+}
+ParserOptions = {
+  ParserVersion = 8
+}

@@ -51,14 +51,25 @@ $errLog = "D:\dftb-neu\data\classroom_hub.err.log"
 "" | Set-Content -Path $outLog -Encoding utf8
 "" | Set-Content -Path $errLog -Encoding utf8
 
-$argList = @(
-  "-m", "uvicorn", "classroom_hub.main:app",
-  "--app-dir", "D:\dftb-neu\apps",
-  "--host", "0.0.0.0",
-  "--port", "8791"
-)
-
-$p = Start-Process -FilePath $py -ArgumentList $argList -WorkingDirectory "D:\dftb-neu" `
-  -WindowStyle Hidden -PassThru -RedirectStandardOutput $outLog -RedirectStandardError $errLog
-"started pid=$($p.Id)" | Out-File -FilePath "D:\dftb-neu\data\classroom_hub.pid.txt" -Encoding ascii
-Write-Output "started pid=$($p.Id)"
+# Detach uvicorn. PowerShell Start-Process redirects close when this script exits.
+$spawnPy = 'D:\dftb-neu\data\classroom\spawn_hub.py'
+@'
+import subprocess, sys
+py, out_path, err_path = sys.argv[1:]
+out = open(out_path, "w", encoding="utf-8", errors="replace")
+err = open(err_path, "w", encoding="utf-8", errors="replace")
+CREATE_BREAKAWAY_FROM_JOB = 0x01000000
+base = subprocess.CREATE_NEW_PROCESS_GROUP | getattr(subprocess, "CREATE_NO_WINDOW", 0)
+argv = [py, "-m", "uvicorn", "classroom_hub.main:app",
+        "--app-dir", r"D:\dftb-neu\apps", "--host", "0.0.0.0", "--port", "8791", "--no-use-colors"]
+try:
+    p = subprocess.Popen(argv, cwd=r"D:\dftb-neu", stdout=out, stderr=err,
+                         stdin=subprocess.DEVNULL, creationflags=base | CREATE_BREAKAWAY_FROM_JOB)
+except OSError:
+    p = subprocess.Popen(argv, cwd=r"D:\dftb-neu", stdout=out, stderr=err,
+                         stdin=subprocess.DEVNULL, creationflags=base)
+print(p.pid)
+'@ | Set-Content -Path $spawnPy -Encoding ascii
+$spawned = (& $py $spawnPy $py $outLog $errLog | Select-Object -Last 1).ToString().Trim()
+"started pid=$spawned" | Out-File -FilePath "D:\dftb-neu\data\classroom_hub.pid.txt" -Encoding ascii
+Write-Output "started pid=$spawned"

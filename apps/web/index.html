@@ -9,7 +9,7 @@
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=Source+Sans+3:opsz,wght@8..60,400;8..60,500;8..60,600;8..60,700&family=Source+Serif+4:opsz,wght@8..60,500;8..60,600;8..60,700&display=swap" rel="stylesheet" />
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
   <meta http-equiv="Pragma" content="no-cache" />
-  <link rel="stylesheet" href="/static/styles.css?v=20260803aa" />
+  <link rel="stylesheet" href="/static/styles.css?v=20260921a" />
   <script src="/static/vendor/3Dmol-min.js"></script>
 </head>
 <body>
@@ -130,7 +130,7 @@
                 <li><strong>Analysis</strong>：能带路径（Klines）、态密度、激发态（Casida）等后处理块。</li>
                 <li>运行 <code>dftb+</code> 后，从 <code>detailed.out</code>、<code>band.out</code>、<code>EXC.DAT</code> 等读取结果并绘图。</li>
               </ol>
-              <p class="guide-lead">本软件会根据自然语言自动生成输入文件（HSD），并在本机 WSL 隔离环境中调用 DFTB+；生成后可直接编辑，再确认计算。</p>
+              <p class="guide-lead">本软件会根据自然语言自动生成输入文件（HSD），也可以上传自己写的 HSD；并在本机 WSL 隔离环境中调用 DFTB+。生成或上传后可直接编辑，再确认计算。</p>
             </div>
           </details>
 
@@ -140,8 +140,8 @@
               <ol class="guide-steps">
                 <li><strong>登录</strong>：学号 + 教师公布的本堂密码。</li>
                 <li><strong>环境</strong>：打开「环境」页，完成 WSL2 / DFTB+ 部署与测试校验（仅首次或更换电脑）。</li>
-                <li><strong>计算</strong>：在首页或「计算」页用一句话描述任务；可点「举例」填充。周期体系可上传 POSCAR/GEN，或由 AI 自动获取结构。</li>
-                <li><strong>确认计算</strong>：输入指令后自动生成 HSD，核对结构与输入后点「确认计算」投到本机。</li>
+                <li><strong>计算</strong>：在首页或「计算」页用一句话描述任务；可点「举例」填充。也可以直接上传自己写的 HSD。周期体系可上传 POSCAR/GEN，或由 AI 自动获取结构。</li>
+                <li><strong>确认计算</strong>：生成或上传 HSD 后，核对结构与输入，再点「确认计算」投到本机。</li>
                 <li><strong>任务</strong>：在「任务」页查看进度、能量/收敛、能带·DOS 等图件，以及本地性能评估。</li>
                 <li><strong>课程（可选）</strong>：固体物理课次可「一键复现」生成结构与输入，便于对照课堂内容。</li>
               </ol>
@@ -221,36 +221,27 @@
           <div class="section-head">
             <div>
               <h2>部署教程</h2>
-              <p>一键部署与手动部署说明；网络较慢时建议改用国内镜像手动安装 Ubuntu。</p>
+              <p>点「部署到本机」即可。软件从国内镜像安装 Ubuntu，再安装 DFTB+。</p>
             </div>
           </div>
 
           <details class="guide-block">
             <summary>一键部署</summary>
             <div class="guide-body">
-              <p class="guide-lead">部署内容：启用 WSL2（如需要）→ 安装 Ubuntu（如需要）→ 在用户目录安装 DFTB+ 与 SK 参数，并完成测试校验。安装位置：WSL 内 <code>~/.dftb-neu</code>。</p>
+              <p class="guide-lead">点 <strong>部署到本机</strong>。有 WSL 时从国内镜像安装 Ubuntu，再安装 DFTB+ 与 SK 参数，并做测试校验。</p>
               <ol class="guide-steps">
                 <li>打开「环境」页，点击 <strong>部署到本机</strong>。</li>
-                <li>若弹出管理员确认（UAC），选择「是」。</li>
-                <li>若出现黑色 <code>wsl.exe</code> 窗口下载 / 安装 Ubuntu，耐心等待（国内网络可能较慢）。</li>
-                <li>若提示创建 Unix 用户：
-                  <ul>
-                    <li>用户名须以<strong>小写字母或下划线</strong>开头，可含小写字母、数字、<code>_</code>、<code>-</code>。</li>
-                    <li>推荐：<code>neu123</code>（不要用 <code>123xxx</code> 这种以数字开头的名称）。</li>
-                    <li>密码输入两遍（输入时不显示字符，属正常）。</li>
-                    <li>出现类似 <code>xxx@DESKTOP-...:~$</code> 后可关闭该窗口。</li>
-                  </ul>
-                </li>
-                <li>若系统提示重启：重启后再次打开软件，进入「环境」，再点一次 <strong>部署到本机</strong>。</li>
-                <li>等待日志结束。三项状态应为：WSL2 就绪、DFTB+ 已安装、测试校验通过。</li>
+                <li>若弹出管理员确认，点「是」。仅在本机尚未启用 WSL 时才会弹出。</li>
+                <li>日志会显示下载进度（约 300 MB）。请保持网络畅通，不要关软件。</li>
+                <li>若日志写「请先重启电脑」：必须先重启，再打开软件，再点一次 <strong>部署到本机</strong>。</li>
+                <li>三项状态均为通过即完成。</li>
               </ol>
               <table class="guide-table">
                 <thead><tr><th>现象</th><th>处理</th></tr></thead>
                 <tbody>
-                  <tr><td>下载 Ubuntu 卡在 0%</td><td>换网络，或按下方「手动部署」用国内镜像安装 Ubuntu</td></tr>
-                  <tr><td>Invalid username</td><td>用户名不能以数字开头，改用 <code>neu123</code></td></tr>
-                  <tr><td>取消了管理员确认</td><td>再点「部署到本机」并允许 UAC</td></tr>
-                  <tr><td>部署失败</td><td>查看本页日志；确认 <code>wsl -d Ubuntu</code> 可进入后再试</td></tr>
+                  <tr><td>下载很慢或失败</td><td>换网络后再点「部署到本机」；仍不行再按下方「手动部署」</td></tr>
+                  <tr><td>取消了管理员确认</td><td>再点「部署到本机」并允许</td></tr>
+                  <tr><td>日志写请先重启电脑</td><td>先重启，再打开软件点「部署到本机」</td></tr>
                 </tbody>
               </table>
             </div>
@@ -319,7 +310,7 @@ wsl -d Ubuntu-22.04 -e whoami</pre>
         <header class="page-head">
           <div>
             <h1>计算</h1>
-            <p>用自然语言描述任务</p>
+            <p>用自然语言描述任务，或上传自己的 HSD 输入文件</p>
           </div>
           <button type="button" id="btn-clear-all" class="btn btn-ghost">清空</button>
         </header>
@@ -333,7 +324,7 @@ wsl -d Ubuntu-22.04 -e whoami</pre>
           <div class="section-head">
             <div>
               <h2>对话与指令</h2>
-              <p>输入自然语言后点「生成输入」；核对 HSD 与结构后再确认计算</p>
+              <p>输入自然语言后点「生成输入」，或直接上传自己写的 HSD；核对后再确认计算</p>
             </div>
           </div>
           <div id="calc-progress" class="calc-progress" hidden>
@@ -351,12 +342,13 @@ wsl -d Ubuntu-22.04 -e whoami</pre>
           <textarea id="chat-input" rows="4" placeholder="例：用 DFTB+ 计算硅晶体能带和 DOS"></textarea>
           <div class="btn-row chat-nl-actions">
             <button type="button" id="btn-nl-submit" class="btn btn-primary">生成输入</button>
+            <label class="file-btn btn" title="上传自己写的 dftb_in.hsd / .txt">上传输入文件<input type="file" id="hsd-file" accept=".hsd,.txt,.in,.HSD" hidden /></label>
           </div>
           <div id="chat-welcome" class="chat-welcome">
             <strong>对话与结果将显示在这里</strong>
           </div>
           <div id="chat-log" class="chat-log" hidden></div>
-          <p class="hsd-hint">HSD 是 DFTB+ 的输入脚本。输入指令后会自动生成；可直接编辑，确认计算时按编辑后的内容投递。</p>
+          <p class="hsd-hint">HSD 是 DFTB+ 的输入脚本。可点「生成输入」自动生成，也可上传自己写的文件；可直接编辑，确认计算时按编辑后的内容投递。若 HSD 引用了 geo.gen / POSCAR，请同时在下方上传结构。</p>
           <div id="hsd-panel" class="hsd-panel" hidden>
             <div class="hsd-panel-head">
               <div>
@@ -412,6 +404,8 @@ wsl -d Ubuntu-22.04 -e whoami</pre>
           </div>
         </header>
         <ul id="project-list" class="project-list"></ul>
+        <p id="project-list-empty" class="project-list-hint" hidden>暂无已投递的任务。在「计算」页确认计算后会出现在这里。</p>
+        <p id="project-list-error" class="project-list-hint is-error" hidden></p>
         <div id="project-detail-host" hidden>
         <div id="project-detail" class="section project-detail" hidden>
           <div class="section-head project-detail-actions">
@@ -585,6 +579,6 @@ wsl -d Ubuntu-22.04 -e whoami</pre>
     </figure>
   </div>
 
-  <script src="/static/app.js?v=20260805f"></script>
+  <script src="/static/app.js?v=20260921c"></script>
 </body>
 </html>

@@ -7,11 +7,13 @@ from pathlib import Path
 from typing import Any, Optional
 
 from dftb_engine.capability import (
+    STAGE_ZH,
     default_kind_for_family,
     list_supported_commands,
     match_family_from_text,
+    resolve_nl_intent,
 )
-from dftb_engine.inputs import build_inputs_for_kind
+from dftb_engine.inputs import KIND_FAMILY, build_inputs_for_kind
 from dftb_engine.maturity import maturity_for_kind, submit_blocked_message
 from dftb_engine.service import DftbEngine
 
@@ -249,11 +251,16 @@ def _missing_structure_message(
 
 
 def _refine_kind(text: str, family: str, kind: str) -> tuple[str, dict[str, Any]]:
-    """按自然语言细化 kind（能带 / DOS 等）。"""
-    params: dict[str, Any] = {"prompt": text}
+    """按自然语言细化 kind；多步指令合成一个作业内的阶段链。"""
+    resolved = resolve_nl_intent(text)
+    params: dict[str, Any] = {"prompt": text, **dict(resolved.get("params") or {})}
+    if resolved.get("kind"):
+        kind = str(resolved["kind"])
+        family = str(resolved.get("family") or family)
     low = (text or "").lower()
-    has_band = any(k in text for k in ("能带", "band", "Band")) or "band" in low
-    has_dos = any(k in text for k in ("态密度", "DOS", "dos", "PDOS", "pdos"))
+    has_gap = bool((resolved.get("flags") or {}).get("gap"))
+    has_band = bool((resolved.get("flags") or {}).get("band") or has_gap)
+    has_dos = bool((resolved.get("flags") or {}).get("dos") or params.get("want_dos"))
     intent = None
     try:
         from dftb_engine import structure_intent as si
@@ -274,22 +281,27 @@ def _refine_kind(text: str, family: str, kind: str) -> tuple[str, dict[str, Any]
         k in low for k in ("graphene", "mos2", "ws2", "hbn")
     )
     is_defect = (is_vacancy or is_doped) and is_2d_host
-    if has_band:
-        kind = "dftb_band"
-        family = "electronic"
-    if has_dos and not has_band:
-        kind = "dftb_dos"
-        family = "electronic"
-    if has_dos:
-        params["want_dos"] = True
-    if has_band and has_dos:
-        kind = "dftb_band"
-        params["want_dos"] = True
-    # 二维缺陷/掺杂：无显式能带/DOS 时走 defect；自旋由意图或空位默认开启
+    # 二维缺陷：电子结构载荷并入 dftb_defect（超胞 + 自旋 + 预优化 + 能带）
+    if is_defect and kind in (
+        "dftb_band",
+        "dftb_dos",
+        "dftb_scc",
+        "dftb_opt",
+        "",
+    ):
+        kind = "dftb_defect"
+        family = "defect_2d"
+        stages = list(params.get("stages") or [])
+        stages = ["opt" if s == "opt" else "defect" if s in ("band", "scc") else s for s in stages]
+        if "defect" not in stages:
+            stages.append("defect")
+        params["stages"] = stages
+        if has_dos:
+            params["want_dos"] = True
+            if "dos" not in stages:
+                stages.append("dos")
+                params["stages"] = stages
     if is_defect:
-        if not has_band and not has_dos:
-            kind = "dftb_defect"
-            family = "defect_2d"
         if intent and intent.get("spin_polarized"):
             params["spin_polarized"] = True
             params["spin_constants"] = True
@@ -313,13 +325,22 @@ def _refine_kind(text: str, family: str, kind: str) -> tuple[str, dict[str, Any]
             )
         else:
             params.setdefault("unpaired_electrons", 1.0)
-    # 周期电子结构 / 振动 / Casida：默认先几何优化
+    # 周期电子结构 / 振动 / Casida / MD：默认先几何优化
     if kind in ("dftb_band", "dftb_dos", "dftb_defect"):
         params.setdefault("pre_relax", True)
         params.setdefault("max_steps", 80)
-    if kind in ("dftb_vib", "dftb_td"):
+        stages = list(params.get("stages") or [])
+        if params.get("pre_relax") and "opt" not in stages:
+            params["stages"] = ["opt"] + stages
+    if kind in ("dftb_vib", "dftb_td", "dftb_md", "dftb_md_anneal"):
         params.setdefault("pre_relax", True)
-        params.setdefault("max_steps", 50)
+        if kind in ("dftb_vib", "dftb_td"):
+            params.setdefault("max_steps", 50)
+        else:
+            params.setdefault("max_steps", 80)
+        stages = list(params.get("stages") or [])
+        if params.get("pre_relax") and "opt" not in stages:
+            params["stages"] = ["opt"] + stages
     return kind, params
 
 
@@ -581,7 +602,7 @@ def preview_hsd(
 ) -> dict[str, Any]:
     # 用户一开始就上传了结构：后续勿提示「近似模板」
     struct_from_request = bool((poscar or "").strip() or (gen or "").strip())
-    family = match_family_from_text(text) or "geometry_vib"
+    family = match_family_from_text(text) or family_hint or "geometry_vib"
     kind = default_kind_for_family(family)
     example_water = False
     matched_ex: dict[str, Any] | None = None
@@ -592,11 +613,12 @@ def preview_hsd(
             example_water = bool(ex.get("use_recipes_water"))
             matched_ex = ex
             break
-    if family_hint:
-        family = family_hint
-    if kind_hint:
-        kind = kind_hint
-    # 按关键词细化能带/DOS；已有 kind_hint / 示例 kind 时保留 kind，只补充 want_dos
+    if not matched_ex:
+        if kind_hint and not match_family_from_text(text):
+            kind = kind_hint
+        if family_hint and not match_family_from_text(text):
+            family = family_hint
+    # 按自然语言细化；示例命中时仍补充 want_dos / 阶段
     refined_kind, extra_params = _refine_kind(text, family, kind)
     if matched_ex:
         if matched_ex.get("sk_set"):
@@ -605,15 +627,10 @@ def preview_hsd(
             extra_params.setdefault(k, v)
         if matched_ex.get("formula"):
             extra_params.setdefault("formula", str(matched_ex["formula"]))
-    if not kind_hint:
-        # 若示例已给出具体 kind，优先示例；否则用关键词细化
-        matched_example = any(
-            ex["prompt"] in text or ex["title"] in text for ex in EXAMPLES
-        )
-        if not matched_example:
-            kind = refined_kind
-    if any(k in text for k in ("能带", "DOS", "态密度", "band", "dos")):
-        family = family_hint or "electronic"
+        kind = matched_ex.get("kind") or kind
+    else:
+        kind = refined_kind
+    family = KIND_FAMILY.get(kind) or family
 
     has_struct = bool(poscar or gen)
     needs_struct = _requires_structure(text, family, kind, example_water=example_water)
@@ -725,6 +742,19 @@ def preview_hsd(
     maturity = maturity_for_kind(kind)
     sk_cov = built.get("sk_coverage") or (built.get("params") or {}).get("_sk_coverage") or {}
     tips = list(_param_tips(kind, sk or "", maturity=maturity, sk_coverage=sk_cov))
+    stages = list(extra_params.get("stages") or [])
+    if stages:
+        labels = [STAGE_ZH.get(s, s) for s in stages]
+        tips.insert(
+            1,
+            {
+                "key": "stages",
+                "title": "本作业阶段",
+                "text": " → ".join(labels) + "。确认计算后在同一作业内依次执行，无需拆成两条任务。",
+            },
+        )
+    for note in extra_params.get("compound_notes") or []:
+        tips.append({"key": "compound", "title": "未纳入本作业", "text": str(note)})
     out = {
         "ok": True,
         "needs_structure": False,
@@ -741,6 +771,7 @@ def preview_hsd(
         "allow_submit": bool(maturity.get("allow_submit")),
         "sk_coverage": sk_cov,
         "param_tips": tips,
+        "stages": list(extra_params.get("stages") or []),
     }
     # SK 缺失：允许预览，但禁止投递并如实说明
     if sk_cov and sk_cov.get("checked") and not sk_cov.get("ok"):
@@ -876,6 +907,212 @@ def _structure_source_short(mp: dict[str, Any]) -> str:
     return ""
 
 
+def _hsd_code_only(hsd: str) -> str:
+    """去掉 # 注释，便于识别 Geometry / Driver 关键字。"""
+    lines = []
+    for ln in (hsd or "").splitlines():
+        s = ln.split("#", 1)[0]
+        if s.strip():
+            lines.append(s)
+    return "\n".join(lines)
+
+
+def hsd_geometry_mode(hsd: str) -> str:
+    """HSD 里 Geometry 的形态：include（<<< 外文件）/ inline（内嵌坐标）/ missing。"""
+    text = _hsd_code_only(hsd)
+    if not re.search(r"Geometry\s*=", text, flags=re.I):
+        return "missing"
+    if re.search(r"Geometry\s*=\s*\w+\s*\{[^}]*<<<", text, flags=re.I | re.S):
+        return "include"
+    return "inline"
+
+
+def _hsd_should_drop_on_kind_upgrade(hsd: str, kind: str) -> bool:
+    """NL 已升级到带附属阶段的主任务，但预览仍是优化/单点 HSD 时丢掉。"""
+    inferred = infer_kind_from_hsd(hsd)
+    if inferred == kind:
+        return False
+    return inferred in ("dftb_opt", "dftb_scc") and kind not in ("dftb_opt", "dftb_scc")
+
+
+def infer_kind_from_hsd(hsd: str) -> str:
+    """从自写 HSD 猜任务类型，主要供出图；真正计算仍按用户文件原样跑。"""
+    text = _hsd_code_only(hsd)
+    low = text.lower()
+    if re.search(r"ExcitedState|Casida", text, flags=re.I):
+        return "dftb_td"
+    if re.search(r"\bxTB\b|GFN2", text, flags=re.I):
+        return "dftb_xtb"
+    if re.search(r"MolecularDynamics|VelocityVerlet|Thermostat", text, flags=re.I):
+        return "dftb_md"
+    if re.search(r"\bHessian\b|VibrationalAnalysis|\bmodes\b", text, flags=re.I):
+        return "dftb_vib"
+    if re.search(r"\bKlines\b|BandStructure|WriteBandOut\s*=\s*Yes", text, flags=re.I):
+        return "dftb_band"
+    if "dos" in low and re.search(r"KPointsAndWeights|SupercellFolding", text, flags=re.I):
+        return "dftb_dos"
+    if re.search(
+        r"GeometryOptimization|ConjugateGradient|SteepestDescent|\bLBFGS\b",
+        text,
+        flags=re.I,
+    ):
+        return "dftb_opt"
+    return "dftb_scc"
+
+
+def _sk_name_from_hsd(hsd: str) -> str:
+    low = (hsd or "").lower()
+    for name in ("3ob", "pbc", "mio", "matsci", "auorg", "ob2"):
+        if f"/{name}/" in low or f"/{name}-" in low or f"{name}-1-1" in low:
+            return name
+    return ""
+
+
+def ensure_hsd_geometry(hsd: str, *, poscar: str = "", gen: str = "") -> str:
+    """自写 HSD 缺少 Geometry 但已上传结构时，补上 <<< 引用。"""
+    body = (hsd or "").strip()
+    if not body or hsd_geometry_mode(body) != "missing":
+        return body
+    if (gen or "").strip():
+        prefix = 'Geometry = GenFormat {\n  <<< "geo.gen"\n}\n\n'
+    elif (poscar or "").strip():
+        prefix = 'Geometry = VaspFormat {\n  <<< "POSCAR"\n}\n\n'
+    else:
+        return body
+    return prefix + body
+
+
+def handle_user_uploaded_hsd(
+    hsd: str,
+    *,
+    message: str = "",
+    project_id: Optional[str] = None,
+    poscar: str = "",
+    gen: str = "",
+    confirm_submit: bool = False,
+) -> dict[str, Any]:
+    """同学上传自己的 dftb_in.hsd：不走自然语言生成，核对后原样投递。"""
+    hsd_text = (hsd or "").strip()
+    if not hsd_text:
+        return {"reply": "请先选择一份 HSD 输入文件。", "ok": False, "actions": []}
+    poscar = (poscar or "").strip()
+    gen = (gen or "").strip()
+    has_struct = bool(poscar or gen)
+    mode = hsd_geometry_mode(hsd_text)
+    if mode == "include" and not has_struct:
+        return {
+            "reply": (
+                "这份输入引用了结构文件（如 geo.gen / POSCAR）。"
+                "请在下方「结构」上传后再确认计算。"
+            ),
+            "ok": False,
+            "preview": {
+                "ok": False,
+                "needs_structure": True,
+                "hsd_preview": hsd_text,
+                "allow_submit": False,
+                "message": "需要同时上传结构文件。",
+            },
+            "actions": [{"type": "need_structure"}],
+        }
+    if mode == "missing" and not has_struct:
+        return {
+            "reply": (
+                "输入文件没有 Geometry 块，也没有上传结构。"
+                "请上传 POSCAR/GEN，或在 HSD 里写上 Geometry。"
+            ),
+            "ok": False,
+            "preview": {
+                "ok": False,
+                "needs_structure": True,
+                "hsd_preview": hsd_text,
+                "allow_submit": False,
+            },
+            "actions": [{"type": "need_structure"}],
+        }
+    hsd_eff = ensure_hsd_geometry(hsd_text, poscar=poscar, gen=gen)
+    kind = infer_kind_from_hsd(hsd_eff)
+    family = KIND_FAMILY.get(kind) or "geometry_vib"
+    sk_set = _sk_name_from_hsd(hsd_eff)
+    msg = (message or "").strip() or "使用自写输入文件"
+    tips = [
+        {
+            "key": "user_hsd",
+            "title": "自写输入",
+            "text": "将按你上传/编辑后的 HSD 原样投递，不再自动生成或套预优化阶段。",
+        }
+    ]
+    preview = {
+        "ok": True,
+        "family": family,
+        "kind": kind,
+        "sk_set": sk_set,
+        "hsd_preview": hsd_eff,
+        "hsd_default": hsd_text,
+        "allow_submit": True,
+        "param_tips": tips,
+        "maturity": maturity_for_kind(kind),
+        "user_hsd": True,
+    }
+    if not confirm_submit:
+        return {
+            "reply": "已载入你上传的输入文件。请核对 HSD 与结构后点「确认计算」。",
+            "ok": True,
+            "project_id": project_id or "",
+            "preview": preview,
+            "actions": [{"type": "confirm_submit"}],
+        }
+
+    if not project_id:
+        proj = db.create_project(title=msg[:40] or "自写输入", idea={"prompt": msg})
+        project_id = proj["id"]
+    else:
+        proj = db.get_project(project_id) or db.create_project(title=msg[:40] or "自写输入")
+        project_id = proj["id"]
+    protocol = {
+        "dftb_family": family,
+        "kind": kind,
+        "sk_set": sk_set,
+        "prompt": msg,
+        "hsd_preview": hsd_eff,
+        "hsd_default": hsd_text,
+        "param_tips": tips,
+        "maturity": maturity_for_kind(kind),
+        "allow_submit": True,
+        "user_hsd": True,
+    }
+    structure: dict[str, Any] = {}
+    if poscar:
+        structure["poscar"] = poscar
+    elif gen:
+        structure["gen"] = gen
+    db.update_project(
+        project_id,
+        protocol=protocol,
+        phase="protocol",
+        idea={"prompt": msg},
+        structure=structure,
+    )
+    return submit_project(
+        project_id, poscar=poscar, gen=gen, hsd=hsd_eff, user_hsd=True
+    )
+
+
+def _project_is_submitted(proj: Optional[dict[str, Any]]) -> bool:
+    """已点确认计算（含排队/计算中/完成/失败），预览不得再写成方案就绪。"""
+    if not proj:
+        return False
+    job = proj.get("job") if isinstance(proj.get("job"), dict) else {}
+    protocol = proj.get("protocol") if isinstance(proj.get("protocol"), dict) else {}
+    if job.get("job_id") or protocol.get("job_id"):
+        return True
+    ph = str(proj.get("phase") or "").lower()
+    st = str(job.get("status") or "").lower()
+    if st in ("pending", "running", "done", "error", "cancelled"):
+        return True
+    return ph in ("running", "analyzed", "manuscript", "error", "cancelled")
+
+
 async def handle_chat(
     message: str,
     *,
@@ -886,9 +1123,20 @@ async def handle_chat(
     confirm_submit: bool = False,
     family_hint: str = "",
     kind_hint: str = "",
+    user_hsd: bool = False,
 ) -> dict[str, Any]:
     """对话编排：匹配能力族 → 预览 HSD →（确认后）投递。"""
     msg = (message or "").strip()
+    hsd_text = (hsd or "").strip()
+    if user_hsd and hsd_text:
+        return handle_user_uploaded_hsd(
+            hsd_text,
+            message=msg,
+            project_id=project_id,
+            poscar=poscar,
+            gen=gen,
+            confirm_submit=confirm_submit,
+        )
     if not msg:
         return {"reply": "请描述计算意图，例如「用 DFTB+ 计算硅晶体能带」。", "actions": []}
 
@@ -901,6 +1149,12 @@ async def handle_chat(
     # 确认投递：直接使用课题已存 protocol/structure，避免输入被清空后重推断失败
     if confirm_submit and project_id:
         return submit_project(project_id, poscar=poscar, gen=gen, hsd=hsd)
+
+    # 预览不得盖掉已投递作业（否则任务页按「方案就绪」过滤，看起来像没任务）
+    if project_id and not confirm_submit:
+        existing = db.get_project(project_id) or {}
+        if _project_is_submitted(existing):
+            project_id = None
 
     if project_id and (not family_hint or not kind_hint):
         existing = db.get_project(project_id) or {}
@@ -943,6 +1197,8 @@ async def handle_chat(
         "param_tips": tips,
         "maturity": preview.get("maturity") or maturity_for_kind(preview.get("kind") or ""),
         "allow_submit": bool(preview.get("allow_submit", True)),
+        "params": preview.get("params") or {},
+        "stages": list(preview.get("stages") or (preview.get("params") or {}).get("stages") or []),
     }
     structure: dict[str, Any] = {}
     # 优先用本次预览结构（含内置模板 / MP / 默认水分子 geo.gen）
@@ -1052,7 +1308,7 @@ async def handle_chat(
 
 
 def submit_project(
-    project_id: str, *, poscar: str = "", gen: str = "", hsd: str = ""
+    project_id: str, *, poscar: str = "", gen: str = "", hsd: str = "", user_hsd: bool = False
 ) -> dict[str, Any]:
     proj = db.get_project(project_id)
     if not proj:
@@ -1060,16 +1316,7 @@ def submit_project(
     protocol = dict(proj.get("protocol") or {})
     kind = protocol.get("kind") or "dftb_opt"
     family = protocol.get("dftb_family") or ""
-    blocked = submit_blocked_message(str(kind))
-    if blocked:
-        db.append_activity(project_id, f"拒绝投递未闭环功能：{kind}", "error")
-        return {
-            "reply": blocked,
-            "ok": False,
-            "project_id": project_id,
-            "maturity": maturity_for_kind(str(kind)),
-            "allow_submit": False,
-        }
+    user_hsd = bool(user_hsd or protocol.get("user_hsd"))
     st = proj.get("structure") or {}
     # 请求体优先；勿在已有 POSCAR 时再拼上库里残留的旧 GEN
     poscar = (poscar or "").strip() or str(st.get("poscar") or "").strip()
@@ -1078,7 +1325,8 @@ def submit_project(
         gen = ""  # 有 POSCAR 时一律由其生成 geo，杜绝上一任务分子 GEN 残留
     hsd_eff = (hsd or protocol.get("hsd_preview") or "").strip()
     # 结构与 HSD 的 MaxAngularMomentum 元素不一致时，丢弃旧 HSD 并重生成
-    if hsd_eff and (poscar or gen):
+    # 自写输入不丢：同学就是要跑这份文件
+    if hsd_eff and (poscar or gen) and not user_hsd:
         try:
             from dftb_engine import geometry as geo_mod
 
@@ -1110,7 +1358,23 @@ def submit_project(
     use_water = (not poscar and not gen) and _allows_water_default(
         prompt, family, kind, example_water=example_water
     )
-    if not poscar and not gen and not use_water:
+    if user_hsd:
+        use_water = False
+        if not poscar and not gen:
+            mode = hsd_geometry_mode(hsd_eff)
+            if mode == "include":
+                return {
+                    "reply": "这份输入引用了结构文件。请在下方「结构」上传 POSCAR/GEN 后再确认计算。",
+                    "ok": False,
+                    "project_id": project_id,
+                }
+            if mode != "inline":
+                return {
+                    "reply": "计算失败：缺少结构。请上传 POSCAR/GEN，或在 HSD 里写上 Geometry。",
+                    "ok": False,
+                    "project_id": project_id,
+                }
+    if not poscar and not gen and not use_water and not user_hsd:
         mp_info = _try_fetch_mp_structure(prompt)
         if _structure_hit(mp_info):
             st = dict(st)
@@ -1134,7 +1398,29 @@ def submit_project(
                 "ok": False,
                 "project_id": project_id,
             }
-    _, job_params = _refine_kind(prompt, family, kind)
+    if user_hsd:
+        _, job_params = _refine_kind(prompt, family, kind)
+    else:
+        kind, job_params = _refine_kind(prompt, family, kind)
+        family = KIND_FAMILY.get(kind) or family
+        protocol["kind"] = kind
+        protocol["dftb_family"] = family
+        protocol["params"] = job_params
+        protocol["stages"] = list(job_params.get("stages") or protocol.get("stages") or [])
+        if hsd_eff and _hsd_should_drop_on_kind_upgrade(hsd_eff, str(kind)):
+            hsd_eff = ""
+            protocol.pop("hsd_preview", None)
+        db.update_project(project_id, protocol=protocol)
+    blocked = submit_blocked_message(str(kind))
+    if blocked:
+        db.append_activity(project_id, f"拒绝投递未闭环功能：{kind}", "error")
+        return {
+            "reply": blocked,
+            "ok": False,
+            "project_id": project_id,
+            "maturity": maturity_for_kind(str(kind)),
+            "allow_submit": False,
+        }
     for ex in EXAMPLES:
         if ex["prompt"] in prompt or ex["title"] in prompt:
             if "DOS" in ex.get("prompt", "") or "态密度" in prompt or "DOS" in prompt:
@@ -1144,35 +1430,40 @@ def submit_project(
             for k, v in dict(ex.get("params") or {}).items():
                 job_params.setdefault(k, v)
             break
+    if user_hsd:
+        job_params["pre_relax"] = False
+        job_params["want_dos"] = False
     # 投递前再查 SK：本机缺参数对则如实拒绝，避免作业必然失败
-    try:
-        from dftb_engine import geometry as geo_mod
-        from dftb_engine import sk_resolver as sk_mod
+    # 自写输入以文件内 SlaterKosterFiles 为准，不做这层拦截
+    if not user_hsd:
+        try:
+            from dftb_engine import geometry as geo_mod
+            from dftb_engine import sk_resolver as sk_mod
 
-        els_chk = (
-            geo_mod.elements_from_poscar(poscar)
-            if poscar
-            else geo_mod.elements_from_gen(gen)
-            if gen
-            else []
-        )
-        sk_name = str(protocol.get("sk_set") or job_params.get("sk_set") or "")
-        if not sk_name and els_chk:
-            sk_name = sk_mod.choose_sk_set(els_chk)
-        if els_chk and sk_name:
-            cov = sk_mod.sk_coverage_report(els_chk, sk_name)
-            if cov.get("checked") and not cov.get("ok"):
-                msg = str(cov.get("message") or "SK 参数不完整，拒绝投递。")
-                db.append_activity(project_id, msg, "error")
-                return {
-                    "reply": msg,
-                    "ok": False,
-                    "project_id": project_id,
-                    "allow_submit": False,
-                    "sk_coverage": cov,
-                }
-    except Exception:
-        pass
+            els_chk = (
+                geo_mod.elements_from_poscar(poscar)
+                if poscar
+                else geo_mod.elements_from_gen(gen)
+                if gen
+                else []
+            )
+            sk_name = str(protocol.get("sk_set") or job_params.get("sk_set") or "")
+            if not sk_name and els_chk:
+                sk_name = sk_mod.choose_sk_set(els_chk)
+            if els_chk and sk_name:
+                cov = sk_mod.sk_coverage_report(els_chk, sk_name)
+                if cov.get("checked") and not cov.get("ok"):
+                    msg = str(cov.get("message") or "SK 参数不完整，拒绝投递。")
+                    db.append_activity(project_id, msg, "error")
+                    return {
+                        "reply": msg,
+                        "ok": False,
+                        "project_id": project_id,
+                        "allow_submit": False,
+                        "sk_coverage": cov,
+                    }
+        except Exception:
+            pass
     eng = _engine()
     result = eng.submit_job(
         kind=kind,
@@ -1182,6 +1473,7 @@ def submit_project(
         sk_set=protocol.get("sk_set") or job_params.get("sk_set") or "",
         params=job_params,
         hsd_override=hsd_eff,
+        user_hsd=user_hsd,
     )
     if result.get("status") != "ok":
         # 尽量保留 job_id，便于任务页查看日志 / 诊断
@@ -1227,6 +1519,13 @@ def _local_calc_brief(preview: dict[str, Any], prompt: str = "") -> str:
     elif (preview.get("params") or {}).get("formula"):
         formula = str((preview.get("params") or {}).get("formula"))
     host = formula or "当前结构"
+    stages = list((preview.get("params") or {}).get("stages") or preview.get("stages") or [])
+    pipe = " → ".join(STAGE_ZH.get(s, s) for s in stages if s)
+    if pipe:
+        extra = ""
+        if (preview.get("params") or {}).get("want_gap") or "带隙" in (prompt or ""):
+            extra = "完成后估算带隙（定性）。"
+        return f"将对「{host}」用 DFTB+（SK={sk}）按 {pipe} 依次计算。{extra}"
     if kind == "dftb_band":
         if preview.get("params", {}).get("want_dos") or "DOS" in (prompt or "") or "态密度" in (
             prompt or ""
@@ -1235,7 +1534,7 @@ def _local_calc_brief(preview: dict[str, Any], prompt: str = "") -> str:
                 f"将对「{host}」用 DFTB+（SK={sk}）先几何优化，再算高对称路径能带，"
                 "并另跑均匀 k 网格得到 DOS；能量相对 Fermi 归零后出图。"
             )
-        return f"将对「{host}」用 DFTB+（SK={sk}）先几何优化，再沿高对称路径计算能带并出图。"
+        return f"将对「{host}」用 DFTB+（SK={sk}）先几何优化，再沿高对称路径计算能带、估算带隙并出图。"
     if kind == "dftb_dos":
         return f"将对「{host}」用 DFTB+（SK={sk}）先几何优化，再以均匀 k 网格估算态密度。"
     if kind == "dftb_defect":
@@ -1300,8 +1599,9 @@ def _param_tips(
                 "key": "band",
                 "title": "能带 / DOS",
                 "text": (
-                    "投递后先几何优化；能带沿高对称路径，若同时要 DOS 会再跑均匀 k 网格。"
-                    "图中能量相对 Fermi 归零。优化失败或缺少 geo_end.gen 时不会静默用未优化结构。"
+                    "投递后先几何优化；能带沿高对称路径，完成后估算带隙。"
+                    "若同时要 DOS 会再跑均匀 k 网格。图中能量相对 Fermi 归零。"
+                    "优化失败或缺少 geo_end.gen 时不会静默用未优化结构。"
                 ),
             }
         )
@@ -1503,6 +1803,19 @@ def next_action_hint(proj: dict[str, Any], job_status: str = "", message: str = 
     return "请先在「计算」页描述任务并预览输入文件。"
 
 
+def _job_stages(protocol: dict[str, Any]) -> list[str]:
+    params = protocol.get("params") if isinstance(protocol.get("params"), dict) else {}
+    stages = protocol.get("stages") or params.get("stages") or []
+    return [str(s) for s in stages if s]
+
+
+def _job_pre_relax(protocol: dict[str, Any]) -> bool:
+    params = protocol.get("params") if isinstance(protocol.get("params"), dict) else {}
+    if params.get("pre_relax") is True or protocol.get("pre_relax") is True:
+        return True
+    return "opt" in _job_stages(protocol)
+
+
 def lecture_summary(proj: dict[str, Any], analysis: Optional[dict[str, Any]] = None) -> dict[str, Any]:
     """课堂讲义式结果摘要（按任务类型裁剪字段）。"""
     from dftb_engine import kind_profile as kp
@@ -1516,12 +1829,22 @@ def lecture_summary(proj: dict[str, Any], analysis: Optional[dict[str, Any]] = N
     structure = proj.get("structure") or {}
     mp = structure.get("mp") or {}
     kind = str(protocol.get("kind") or "")
+    stages = _job_stages(protocol)
+    pre_relax = _job_pre_relax(protocol)
     items = [
         {"key": "title", "label": "课题", "value": proj.get("title") or "—"},
         {"key": "phase", "label": "阶段", "value": phase_label_zh(proj.get("phase") or "")},
         {"key": "kind", "label": "任务类型", "value": kind or "—"},
         {"key": "sk", "label": "SK 参数集", "value": protocol.get("sk_set") or "—"},
     ]
+    if stages:
+        items.append(
+            {
+                "key": "pipeline",
+                "label": "计算阶段",
+                "value": " → ".join(STAGE_ZH.get(s, s) for s in stages),
+            }
+        )
     src_short = _structure_source_short(mp)
     if src_short:
         items.append({"key": "mp", "label": "结构来源", "value": src_short})
@@ -1551,7 +1874,7 @@ def lecture_summary(proj: dict[str, Any], analysis: Optional[dict[str, Any]] = N
             items.append({"key": "path", "label": "k 路径", "value": path_lbl.replace("G", "Γ")})
         if analysis.get("n_kpoints"):
             items.append({"key": "nk", "label": "k 点数", "value": str(analysis["n_kpoints"])})
-    if kp.shows_opt_metrics(kind):
+    if kp.shows_opt_metrics(kind, pre_relax=pre_relax):
         opt_e = detailed.get("opt_energies_eV") or analysis.get("opt_energies_eV") or []
         if isinstance(opt_e, list) and len(opt_e) >= 2:
             items.append({"key": "opt_steps", "label": "优化步数", "value": str(len(opt_e))})
@@ -1633,12 +1956,12 @@ def lecture_summary(proj: dict[str, Any], analysis: Optional[dict[str, Any]] = N
         bits = []
         if scc_ok is not None:
             bits.append("SCC：" + ("是" if scc_ok else "否"))
-        if geo_ok is not None and (kp.shows_opt_metrics(kind) or geo_ok):
+        if geo_ok is not None and (kp.shows_opt_metrics(kind, pre_relax=pre_relax) or geo_ok):
             bits.append("几何：" + ("是" if geo_ok else "否"))
         if bits:
             items.append({"key": "conv", "label": "收敛", "value": " · ".join(bits)})
     if perf.get("scc_iterations") is not None and (
-        kp.shows_fermi(kind) or kp.shows_opt_metrics(kind) or not kind
+        kp.shows_fermi(kind) or kp.shows_opt_metrics(kind, pre_relax=pre_relax) or not kind
     ):
         items.append({"key": "scc", "label": "SCC 迭代", "value": str(perf["scc_iterations"])})
     criteria = protocol.get("success_criteria") or []
@@ -1648,7 +1971,10 @@ def lecture_summary(proj: dict[str, Any], analysis: Optional[dict[str, Any]] = N
         "success_criteria": criteria,
         "expected_observables": observables,
         "narrative": _lecture_narrative(analysis, protocol, gap, meta),
-        "show_structure_compare": kp.shows_structure_compare(kind),
+        "show_structure_compare": kp.shows_structure_compare(
+            kind, pre_relax=pre_relax, stages=stages
+        ),
+        "stages": stages,
     }
 
 
@@ -1673,7 +1999,7 @@ def _lecture_narrative(
             parts.append(f"由能带估算的带隙约 {g:.3f} eV（相对 Fermi，课堂定性参考）。")
     if kp.shows_kpath(kind) and meta.get("path_name"):
         parts.append(f"能带路径：{meta.get('path_name')}。")
-    if kp.shows_opt_metrics(kind):
+    if kp.shows_opt_metrics(kind, pre_relax=_job_pre_relax(protocol)):
         detailed = analysis.get("detailed") or {}
         opt_e = detailed.get("opt_energies_eV") or analysis.get("opt_energies_eV") or []
         if isinstance(opt_e, list) and len(opt_e) >= 2:

@@ -32,6 +32,7 @@ class DftbEngine:
         use_recipes_water: bool = False,
         sk_set: str = "",
         hsd_override: str = "",
+        user_hsd: bool = False,
     ) -> dict[str, Any]:
         job_id = job_id or f"edu_{uuid.uuid4().hex[:10]}"
         built = build_inputs_for_kind(
@@ -42,6 +43,10 @@ class DftbEngine:
             params=params,
             use_recipes_water=use_recipes_water,
         )
+        # 自写输入：只跑用户的 dftb_in.hsd，不要再套预优化 / DOS 附属阶段
+        if user_hsd:
+            for extra in ("dftb_in_opt.hsd", "dftb_in_dos.hsd", "modes_in.hsd"):
+                built["files"].pop(extra, None)
         # SK 路径改为课堂根；前端编辑只覆盖电子结构主输入 dftb_in.hsd（勿覆盖预优化 dftb_in_opt.hsd）
         override = (hsd_override or "").strip()
         for name, content in list(built["files"].items()):

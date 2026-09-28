@@ -39,7 +39,7 @@ from dftbneu.routers import (
     structure,
 )
 
-app = FastAPI(title="DFTB Neu", version="0.2.1")
+app = FastAPI(title="DFTB Neu", version="0.4.5")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -60,6 +60,13 @@ app.include_router(status.router, prefix="/api")
 app.include_router(license_router.router, prefix="/api")
 
 
+def _no_store(response):
+    if response is not None:
+        response.headers["Cache-Control"] = "no-store, no-cache, must-revalidate, max-age=0"
+        response.headers["Pragma"] = "no-cache"
+    return response
+
+
 @app.middleware("http")
 async def classroom_license_gate(request, call_next):
     path = request.url.path or ""
@@ -72,7 +79,7 @@ async def classroom_license_gate(request, call_next):
         "/api/status",
     )
     if any(path == p or path.startswith(p + "/") for p in open_prefixes):
-        return await call_next(request)
+        return _no_store(await call_next(request))
     import time
 
     from fastapi.responses import JSONResponse
@@ -80,26 +87,30 @@ async def classroom_license_gate(request, call_next):
     from dftbneu.services import license as lic
 
     if not lic.license_required():
-        return await call_next(request)
+        return _no_store(await call_next(request))
     st = lic.public_license_status()
     if not st.get("activated"):
-        return JSONResponse(
-            {"detail": "尚未登录或会话已失效", "license": st},
-            status_code=401,
+        return _no_store(
+            JSONResponse(
+                {"detail": "尚未登录或会话已失效", "license": st},
+                status_code=401,
+            )
         )
     # 本地过期立即拒绝；超过 15 秒未在线校验则向中心重验（教师清密码后尽快失效）
     cfg_last = float(st.get("last_ok_at") or 0)
     if not cfg_last or (time.time() - cfg_last) > 15:
         check = await lic.check_session(allow_offline_grace=True)
         if not check.get("ok"):
-            return JSONResponse(
-                {
-                    "detail": check.get("message") or "课堂许可无效，请重新登录",
-                    "license": lic.public_license_status(),
-                },
-                status_code=401,
+            return _no_store(
+                JSONResponse(
+                    {
+                        "detail": check.get("message") or "课堂许可无效，请重新登录",
+                        "license": lic.public_license_status(),
+                    },
+                    status_code=401,
+                )
             )
-    return await call_next(request)
+    return _no_store(await call_next(request))
 
 
 @app.get("/api/health")

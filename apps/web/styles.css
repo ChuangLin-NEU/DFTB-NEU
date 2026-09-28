@@ -699,6 +699,7 @@ textarea { resize: vertical; min-height: 84px; font-family: var(--mono); font-si
   margin: 0 !important;
 }
 .chat-nl-actions { margin: 8px 0 12px; }
+.chat-nl-actions .file-btn { min-height: 38px; }
 
 .task-io {
   margin: 0 0 14px;
@@ -867,6 +868,13 @@ textarea { resize: vertical; min-height: 84px; font-family: var(--mono); font-si
 }
 
 .project-list { list-style: none; padding: 0; margin: 0 0 12px; }
+.project-list-hint {
+  margin: 4px 0 16px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.5;
+}
+.project-list-hint.is-error { color: #b42318; }
 .project-list > li.project-item {
   display: block;
   border: 1px solid var(--line); background: var(--panel);
@@ -1419,6 +1427,8 @@ code {
 .check-item p { margin: 3px 0 0; color: var(--muted); font-size: 0.78rem; line-height: 1.35; }
 .check-item.ok { border-color: rgba(var(--ok-rgb), 0.35); background: rgba(var(--ok-rgb), 0.06); }
 .check-item.ok .dot { background: var(--ok); color: #fff; }
+.check-item.pending { border-color: rgba(184, 120, 24, 0.35); background: rgba(184, 120, 24, 0.06); }
+.check-item.pending .dot { background: #c6862a; color: #fff; }
 
 .course-list { display: flex; flex-direction: column; gap: 12px; }
 .course-intro {

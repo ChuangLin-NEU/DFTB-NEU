@@ -268,7 +268,11 @@
   "nl_intent_keywords": {
     "electronic": [
       "能带",
+      "带隙",
+      "能隙",
+      "禁带",
       "band structure",
+      "bandgap",
       "DOS",
       "PDOS",
       "电子结构",
@@ -410,11 +414,23 @@
     },
     {
       "family": "electronic",
+      "text": "对该结构进行几何优化并计算其带隙值"
+    },
+    {
+      "family": "electronic",
+      "text": "几何优化并计算能带和态密度"
+    },
+    {
+      "family": "electronic",
       "text": "DFTB+ 能带和 DOS"
     },
     {
       "family": "geometry_vib",
       "text": "用 DFTB+ 对 H2O 做几何优化"
+    },
+    {
+      "family": "geometry_vib",
+      "text": "几何优化并计算振动频率"
     },
     {
       "family": "geometry_vib",

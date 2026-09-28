@@ -7,12 +7,15 @@ node_modules/
 packaging/windows/electron/dist/
 packaging/windows/teacher-electron/dist/
 packaging/windows/release/
+# 安装包超过 GitHub 单文件 100MB 限制，仅保留在本地
+packaging/windows/*.exe
+packaging/windows/installer-ui-student/resources/payload/
 packaging/windows/backend/python-win/
 packaging/windows/backend/pydeps/
 packaging/windows/.cache/
 *.log
 .pytest_cache/
 .mypy_cache/
-# 密钥与本机配置进库
+.env
 *.egg-info/
 data/projects/

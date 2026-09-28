@@ -1,0 +1,96 @@
+{
+  "name": "dftb-neu-mac",
+  "version": "0.4.5",
+  "description": "DFTB classroom student desktop (macOS, hub DeepSeek)",
+  "main": "main.js",
+  "author": "dftb-neu",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "pack": "electron-builder --mac dir --arm64 --x64",
+    "dist": "electron-builder --mac dmg zip --arm64 --x64"
+  },
+  "build": {
+    "appId": "org.dftbneu.app",
+    "productName": "DFTB-NEU 工作台",
+    "electronVersion": "35.1.2",
+    "directories": {
+      "output": "dist",
+      "buildResources": "../build"
+    },
+    "files": [
+      "main.js",
+      "preload.js",
+      "package.json"
+    ],
+    "mac": {
+      "icon": "../build/icon.png",
+      "category": "public.app-category.education",
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        },
+        {
+          "target": "zip",
+          "arch": [
+            "arm64",
+            "x64"
+          ]
+        }
+      ],
+      "artifactName": "DFTB_Neu_Mac_${version}_${arch}.${ext}",
+      "identity": null,
+      "hardenedRuntime": false,
+      "gatekeeperAssess": false
+    },
+    "dmg": {
+      "artifactName": "DFTB_Neu_Mac_${version}_${arch}.${ext}"
+    },
+    "extraResources": [
+      {
+        "from": "../../../apps/api",
+        "to": "api",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "../../../apps/web",
+        "to": "web",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../../../engines",
+        "to": "engines",
+        "filter": [
+          "**/*",
+          "!**/__pycache__/**",
+          "!**/*.pyc"
+        ]
+      },
+      {
+        "from": "../../../templates",
+        "to": "templates",
+        "filter": [
+          "**/*"
+        ]
+      },
+      {
+        "from": "../build/icon.png",
+        "to": "icon.png"
+      }
+    ]
+  },
+  "devDependencies": {
+    "electron": "35.1.2",
+    "electron-builder": "26.15.3"
+  }
+}

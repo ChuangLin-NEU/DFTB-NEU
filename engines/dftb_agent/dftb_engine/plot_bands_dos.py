@@ -151,12 +151,14 @@ def plot_from_artifacts(
             return f"{formula}: {base}"
         return base
 
-    # 几何优化能量轨迹（仅优化类任务；轨迹多在 dftb.log）
+    # 几何优化能量轨迹（含「先优化再电子结构」的 stage1）
     opt_e = detailed.get("opt_energies_eV") or []
-    if len(opt_e) < 2 and kp.normalize_kind(job_kind) in kp.OPT_KINDS:
+    if len(opt_e) < 2:
         log_txt = artifacts.get("dftb.log") or ""
         if not re.search(r"(?i)Total\s+MD\s+Energy|Molecular dynamics completed", log_txt):
-            opt_e = parse_opt_energies(log_txt)
+            parsed = parse_opt_energies(log_txt)
+            if len(parsed) >= 2:
+                opt_e = parsed
     if kp.want_plot_opt_energy(job_kind, has_opt_trace=len(opt_e) >= 2):
         fig, ax = plt.subplots(figsize=(4.6, 3.2))
         ax.plot(range(1, len(opt_e) + 1), opt_e, color="#0F6E6A", lw=1.4, marker="o", ms=3)

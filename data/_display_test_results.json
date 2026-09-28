@@ -1,0 +1,186 @@
+[
+  {
+    "id": "si_band",
+    "kind": "dftb_band",
+    "ok": true,
+    "sec": 2.5,
+    "exit": 0,
+    "plots": [
+      "dftb_bands.png",
+      "dftb_dos.png"
+    ],
+    "missing_keys": [],
+    "missing_figs": [],
+    "notes": [],
+    "summary": {
+      "energy": -281.3786,
+      "fermi": -3.4317218341388975,
+      "gap": 1.4435000000000002,
+      "nk": 101,
+      "opt_steps": 0,
+      "nvib": null,
+      "vib_range": null,
+      "md_steps": null,
+      "tmean": null,
+      "nexc": null
+    },
+    "dir": ""
+  },
+  {
+    "id": "graphene_band",
+    "kind": "dftb_band",
+    "ok": true,
+    "sec": 1.5,
+    "exit": 0,
+    "plots": [
+      "dftb_bands.png",
+      "dftb_dos.png"
+    ],
+    "missing_keys": [],
+    "missing_figs": [],
+    "notes": [],
+    "summary": {
+      "energy": -92.6119,
+      "fermi": -4.483663064924632,
+      "gap": 0.15029999999999966,
+      "nk": 91,
+      "opt_steps": 0,
+      "nvib": null,
+      "vib_range": null,
+      "md_steps": null,
+      "tmean": null,
+      "nexc": null
+    },
+    "dir": ""
+  },
+  {
+    "id": "h2o_opt",
+    "kind": "dftb_opt",
+    "ok": true,
+    "sec": 1.1,
+    "exit": 0,
+    "plots": [
+      "dftb_opt_energy.png"
+    ],
+    "missing_keys": [],
+    "missing_figs": [],
+    "notes": [],
+    "summary": {
+      "energy": -110.7937,
+      "fermi": 1.7202414726952242,
+      "gap": null,
+      "nk": null,
+      "opt_steps": 10,
+      "nvib": null,
+      "vib_range": null,
+      "md_steps": null,
+      "tmean": null,
+      "nexc": null
+    },
+    "dir": ""
+  },
+  {
+    "id": "ch4_vib",
+    "kind": "dftb_vib",
+    "ok": true,
+    "sec": 2.7,
+    "exit": 0,
+    "plots": [
+      "dftb_vibrations.png"
+    ],
+    "missing_keys": [],
+    "missing_figs": [],
+    "notes": [],
+    "summary": {
+      "energy": -87.9195,
+      "fermi": 0.4412989720595017,
+      "gap": null,
+      "nk": null,
+      "opt_steps": 0,
+      "nvib": 15,
+      "vib_range": "140.2-3011.4",
+      "md_steps": null,
+      "tmean": null,
+      "nexc": null
+    },
+    "dir": ""
+  },
+  {
+    "id": "nh3_md",
+    "kind": "dftb_md",
+    "ok": true,
+    "sec": 3.2,
+    "exit": 0,
+    "plots": [
+      "dftb_md_energy.png"
+    ],
+    "missing_keys": [],
+    "missing_figs": [],
+    "notes": [],
+    "summary": {
+      "energy": -96.1421,
+      "fermi": 2.138103337646106,
+      "gap": null,
+      "nk": null,
+      "opt_steps": 0,
+      "nvib": null,
+      "vib_range": null,
+      "md_steps": 61,
+      "tmean": 193.83126721311476,
+      "nexc": null
+    },
+    "dir": ""
+  },
+  {
+    "id": "casida",
+    "kind": "dftb_td",
+    "ok": true,
+    "sec": 0.8,
+    "exit": 0,
+    "plots": [
+      "dftb_absorption.png"
+    ],
+    "missing_keys": [],
+    "missing_figs": [],
+    "notes": [],
+    "summary": {
+      "energy": -340.4821,
+      "fermi": -3.9315936389083848,
+      "gap": null,
+      "nk": null,
+      "opt_steps": 0,
+      "nvib": null,
+      "vib_range": null,
+      "md_steps": null,
+      "tmean": null,
+      "nexc": 6
+    },
+    "dir": ""
+  },
+  {
+    "id": "h2co_xtb",
+    "kind": "dftb_xtb",
+    "ok": true,
+    "sec": 1.2,
+    "exit": 0,
+    "plots": [
+      "dftb_opt_energy.png"
+    ],
+    "missing_keys": [],
+    "missing_figs": [],
+    "notes": [],
+    "summary": {
+      "energy": -195.2593,
+      "fermi": -9.723933649495425,
+      "gap": null,
+      "nk": null,
+      "opt_steps": 9,
+      "nvib": null,
+      "vib_range": null,
+      "md_steps": null,
+      "tmean": null,
+      "nexc": null
+    },
+    "dir": ""
+  }
+]

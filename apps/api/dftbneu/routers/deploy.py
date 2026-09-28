@@ -26,6 +26,11 @@ def wsl():
     return deploy_svc.detect_wsl()
 
 
+@router.get("/deploy/progress")
+async def progress():
+    return deploy_svc.read_deploy_progress()
+
+
 @router.post("/deploy/ensure-wsl")
 def ensure_wsl():
     return deploy_svc.ensure_wsl()

@@ -1,0 +1,92 @@
+[
+  {
+    "id": "si_band",
+    "kind": "dftb_band",
+    "status": "OK",
+    "sk": "pbc",
+    "els": [
+      "Si"
+    ],
+    "sec": 0.5,
+    "errs": [],
+    "dir": "C:\\Users\\13919\\Projects\\dftb-neu\\data\\ex_si_band_5hpir89v"
+  },
+  {
+    "id": "graphene_band",
+    "kind": "dftb_band",
+    "status": "OK",
+    "sk": "3ob",
+    "els": [
+      "C"
+    ],
+    "sec": 0.3,
+    "errs": [],
+    "dir": "C:\\Users\\13919\\Projects\\dftb-neu\\data\\ex_graphene_band_tx48fwmf"
+  },
+  {
+    "id": "h2o_opt",
+    "kind": "dftb_opt",
+    "status": "OK",
+    "sk": "3ob",
+    "els": [
+      "O",
+      "H"
+    ],
+    "sec": 0.7,
+    "errs": [],
+    "dir": "C:\\Users\\13919\\Projects\\dftb-neu\\data\\ex_h2o_opt__txf7eqc"
+  },
+  {
+    "id": "ch4_vib",
+    "kind": "dftb_vib",
+    "status": "OK",
+    "sk": "3ob",
+    "els": [
+      "C",
+      "H"
+    ],
+    "sec": 0.8,
+    "errs": [],
+    "dir": "C:\\Users\\13919\\Projects\\dftb-neu\\data\\ex_ch4_vib_zt3lzcnc"
+  },
+  {
+    "id": "nh3_md",
+    "kind": "dftb_md",
+    "status": "OK",
+    "sk": "3ob",
+    "els": [
+      "N",
+      "H"
+    ],
+    "sec": 3.2,
+    "errs": [],
+    "dir": "C:\\Users\\13919\\Projects\\dftb-neu\\data\\ex_nh3_md_zsbvbsw1"
+  },
+  {
+    "id": "casida",
+    "kind": "dftb_td",
+    "status": "OK",
+    "sk": "3ob",
+    "els": [
+      "C",
+      "H"
+    ],
+    "sec": 0.3,
+    "errs": [],
+    "dir": "C:\\Users\\13919\\Projects\\dftb-neu\\data\\ex_casida_ebvb5rb3"
+  },
+  {
+    "id": "h2co_xtb",
+    "kind": "dftb_xtb",
+    "status": "OK",
+    "sk": "3ob",
+    "els": [
+      "C",
+      "O",
+      "H"
+    ],
+    "sec": 0.7,
+    "errs": [],
+    "dir": "C:\\Users\\13919\\Projects\\dftb-neu\\data\\ex_h2co_xtb_9ya9fsg0"
+  }
+]

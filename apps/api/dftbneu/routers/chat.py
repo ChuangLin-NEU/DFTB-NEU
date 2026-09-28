@@ -23,6 +23,7 @@ class ChatIn(BaseModel):
     gen: str = ""
     hsd: str = ""
     confirm_submit: bool = False
+    user_hsd: bool = False
     family: str = ""
     kind: str = ""
 
@@ -43,6 +44,7 @@ async def chat(body: ChatIn):
         confirm_submit=body.confirm_submit,
         family_hint=body.family or "",
         kind_hint=body.kind or "",
+        user_hsd=body.user_hsd,
     )
 
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import uuid
 from datetime import datetime
 from pathlib import Path
@@ -33,6 +34,29 @@ def _meta_path(project_id: str) -> Path:
     return project_dir(project_id) / "project.json"
 
 
+def _as_map(v: Any) -> dict[str, Any]:
+    return v if isinstance(v, dict) else {}
+
+
+def _write_json(path: Path, data: dict[str, Any]) -> None:
+    """同目录临时文件 + replace，避免列表读取到半截 JSON。"""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = json.dumps(data, ensure_ascii=False, indent=2)
+    tmp = path.with_name(path.name + ".tmp")
+    tmp.write_text(text, encoding="utf-8")
+    os.replace(tmp, path)
+
+
+def _read_json(path: Path) -> Optional[dict[str, Any]]:
+    if not path.is_file():
+        return None
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+        return None
+    return data if isinstance(data, dict) else None
+
+
 def create_project(title: str, idea: Optional[dict] = None) -> dict[str, Any]:
     pid = uuid.uuid4().hex[:12]
     proj = {
@@ -47,15 +71,12 @@ def create_project(title: str, idea: Optional[dict] = None) -> dict[str, Any]:
         "manuscript": {},
         "activity": [],
     }
-    _meta_path(pid).write_text(json.dumps(proj, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_json(_meta_path(pid), proj)
     return proj
 
 
 def get_project(project_id: str) -> Optional[dict[str, Any]]:
-    p = _meta_path(project_id)
-    if not p.is_file():
-        return None
-    return json.loads(p.read_text(encoding="utf-8"))
+    return _read_json(_meta_path(project_id))
 
 
 def update_project(project_id: str, **kwargs: Any) -> Optional[dict[str, Any]]:
@@ -64,31 +85,45 @@ def update_project(project_id: str, **kwargs: Any) -> Optional[dict[str, Any]]:
         return None
     proj.update(kwargs)
     proj["updated_at"] = _now()
-    _meta_path(project_id).write_text(json.dumps(proj, ensure_ascii=False, indent=2), encoding="utf-8")
+    _write_json(_meta_path(project_id), proj)
     return proj
 
 
 def list_projects() -> list[dict[str, Any]]:
     rows = []
-    for p in projects_dir().iterdir():
-        if p.is_dir() and (p / "project.json").is_file():
-            meta = json.loads((p / "project.json").read_text(encoding="utf-8"))
-            job = meta.get("job") or {}
-            protocol = meta.get("protocol") or {}
-            structure = meta.get("structure") or {}
+    root = projects_dir()
+    try:
+        entries = list(root.iterdir())
+    except OSError:
+        return []
+    for p in entries:
+        try:
+            if not p.is_dir() or not (p / "project.json").is_file():
+                continue
+            meta = _read_json(p / "project.json")
+            if not meta:
+                continue
+            job = _as_map(meta.get("job"))
+            protocol = _as_map(meta.get("protocol"))
+            structure = _as_map(meta.get("structure"))
+            job_id = job.get("job_id") or protocol.get("job_id") or ""
+            job_status = job.get("status") or ""
             rows.append(
                 {
-                    "id": meta.get("id"),
+                    "id": meta.get("id") or p.name,
                     "title": meta.get("title"),
                     "phase": meta.get("phase"),
                     "created_at": meta.get("created_at"),
-                    "job": {"job_id": job.get("job_id"), "status": job.get("status")} if job else None,
+                    "job": {"job_id": job_id, "status": job_status} if job_id or job_status else None,
+                    "protocol_job_id": protocol.get("job_id") or "",
                     "kind": protocol.get("kind"),
                     "sk_set": protocol.get("sk_set"),
                     "has_structure": bool(structure.get("poscar") or structure.get("gen")),
                     "lesson_id": protocol.get("lesson_id"),
                 }
             )
+        except Exception:
+            continue
     rows.sort(key=lambda x: x.get("created_at") or "", reverse=True)
     return rows
 

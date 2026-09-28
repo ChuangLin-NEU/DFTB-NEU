@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import platform
+import re
 import shlex
 import shutil
 import subprocess
@@ -11,6 +12,8 @@ import time
 import uuid
 from pathlib import Path
 from typing import Any, Optional
+
+_DISTRO_NAME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,63}$")
 
 
 def edu_home() -> Path:
@@ -37,6 +40,102 @@ def wsl_exe() -> str:
     return shutil.which("wsl.exe") or shutil.which("wsl") or "wsl.exe"
 
 
+def _utf16_nul_ratio(raw: bytes) -> float:
+    """奇数位大量 0x00 才像 UTF-16LE。偶数长度的 UTF-8 不能按 UTF-16 解。"""
+    if len(raw) < 4:
+        return 0.0
+    sample = raw[: min(240, len(raw))]
+    if len(sample) % 2:
+        sample = sample[:-1]
+    pairs = len(sample) // 2
+    if pairs == 0:
+        return 0.0
+    nuls = sum(1 for i in range(1, len(sample), 2) if sample[i] == 0)
+    return nuls / pairs
+
+
+def _decode_score(s: str) -> int:
+    if not s:
+        return -10
+    bad = s.count("\ufffd")
+    cjk = sum(1 for ch in s if "\u4e00" <= ch <= "\u9fff")
+    ascii_ok = sum(1 for ch in s if ch.isascii() and ch.isprintable())
+    latin = sum(1 for ch in s if "A" <= ch <= "Z" or "a" <= ch <= "z")
+    repeat_pen = 0
+    if len(s) >= 12:
+        for n in (2, 3, 4):
+            chunk = s[:n]
+            if chunk.strip() and s.count(chunk) >= 4:
+                repeat_pen = 80
+                break
+    marker = 0
+    low = s.lower()
+    for m in ("deploy_ok", "smoke_ok", "ubuntu", "name", "state", "wsl", "dftb", "geometry"):
+        if m in low:
+            marker += 40
+    if len(s) > 24 and cjk > len(s) * 0.65 and latin < 4:
+        return -80 - bad * 12 - repeat_pen
+    return cjk * 2 + ascii_ok + marker - bad * 12 - repeat_pen
+
+
+def decode_wsl_bytes(data: bytes | None) -> str:
+    """wsl.exe 自身常用 UTF-16；发行版里 bash 输出是 UTF-8。只在像 UTF-16 时才按 UTF-16 解。"""
+    if not data:
+        return ""
+    raw = bytes(data)
+    cands: list[str] = []
+    utf16_likely = (
+        raw.startswith(b"\xff\xfe")
+        or raw.startswith(b"\xfe\xff")
+        or _utf16_nul_ratio(raw) >= 0.35
+    )
+    if raw.startswith(b"\xfe\xff"):
+        cands.append(raw.decode("utf-16-be", errors="replace"))
+    elif utf16_likely:
+        cands.append(raw.decode("utf-16-le", errors="replace"))
+    try:
+        cands.append(raw.decode("utf-8"))
+    except UnicodeDecodeError:
+        cands.append(raw.decode("utf-8", errors="replace"))
+    if not utf16_likely:
+        for enc in ("gbk", "cp936"):
+            try:
+                cands.append(raw.decode(enc))
+            except UnicodeDecodeError:
+                continue
+    best = max(cands, key=_decode_score)
+    return best.replace("\x00", "").replace("\ufeff", "")
+
+
+def looks_garbled_wsl_text(text: str) -> bool:
+    """解错码后的重复生僻字，不能当安装日志展示。"""
+    if not text:
+        return False
+    if "DEPLOY_OK" in text or "SMOKE_OK" in text:
+        return False
+    if _decode_score(text) < 0:
+        return True
+    if text.count("\ufffd") >= 2:
+        return True
+    return False
+
+
+def _looks_mojibake(text: str) -> bool:
+    if not text:
+        return False
+    if text.count("\ufffd") >= 2:
+        return True
+    low = text.lower()
+    return "wsl.exe --install" in low or "aka.ms/wslinstall" in low
+
+
+def is_wsl_distro_name(name: str) -> bool:
+    n = (name or "").strip().lstrip("*")
+    if not n or not _DISTRO_NAME_RE.match(n):
+        return False
+    return n.lower() not in {"name", "state", "version", "windows", "linux", "subsystem"}
+
+
 _WSL_DISTRO_CACHE: Optional[str] = None
 
 
@@ -48,23 +147,26 @@ def list_wsl_distros() -> list[str]:
     names: list[str] = []
     try:
         r = subprocess.run([exe, "-l", "-v"], capture_output=True, timeout=20)
-        text = (r.stdout or b"").decode("utf-16-le", errors="replace")
-        if not text.strip():
-            text = (r.stdout or b"").decode("utf-8", errors="replace")
-        text += (r.stderr or b"").decode("utf-16-le", errors="replace")
+        text = decode_wsl_bytes(r.stdout) + decode_wsl_bytes(r.stderr)
         for line in text.splitlines():
             line = line.strip().replace("\x00", "")
-            if not line or "NAME" in line.upper() or line.lower().startswith("windows subsystem"):
+            if not line or line.lower().startswith("windows subsystem"):
                 continue
             parts = line.split()
+            if parts and parts[0] in {"*", ">"}:
+                parts = parts[1:]
             if not parts:
                 continue
             name = parts[0].lstrip("*").strip()
-            if name and name not in names:
+            if name.upper() in {"NAME", "STATE", "VERSION"}:
+                continue
+            if is_wsl_distro_name(name) and name not in names:
                 names.append(name)
     except Exception:
         return []
-    return names
+    preferred = [n for n in names if n.lower().startswith("ubuntu")]
+    others = [n for n in names if n.lower() not in {"docker-desktop", "docker-desktop-data"} and n not in preferred]
+    return preferred + others
 
 
 def _distro_has_dftb(distro: str) -> bool:
@@ -83,6 +185,10 @@ def resolve_wsl_distro(preferred: str = "") -> str:
     """选择可用的 WSL 发行版：优先已配置且含 DFTB+ 的；否则扫描含 DFTB+ 的发行版。"""
     global _WSL_DISTRO_CACHE
     preferred = (preferred or os.environ.get("DFTB_NEU_WSL_DISTRO") or "").strip()
+    if preferred and not is_wsl_distro_name(preferred):
+        preferred = ""
+    if _WSL_DISTRO_CACHE and not is_wsl_distro_name(_WSL_DISTRO_CACHE):
+        _WSL_DISTRO_CACHE = None
     if preferred and _distro_has_dftb(preferred):
         _WSL_DISTRO_CACHE = preferred
         return preferred
@@ -94,12 +200,14 @@ def resolve_wsl_distro(preferred: str = "") -> str:
         if _distro_has_dftb(name):
             _WSL_DISTRO_CACHE = name
             return name
-    # 无 DFTB 时仍尊重用户配置 / 默认发行版，便于部署页提示
-    if preferred:
+    known = list_wsl_distros()
+    if preferred and preferred in known:
         _WSL_DISTRO_CACHE = preferred
         return preferred
-    distros = list_wsl_distros()
-    return distros[0] if distros else ""
+    if known:
+        _WSL_DISTRO_CACHE = known[0]
+        return known[0]
+    return ""
 
 
 def run_local(cmd: str, *, cwd: Optional[Path] = None, timeout: int = 120) -> subprocess.CompletedProcess:
@@ -114,20 +222,26 @@ def run_local(cmd: str, *, cwd: Optional[Path] = None, timeout: int = 120) -> su
     )
 
 
-def run_wsl(bash_cmd: str, *, timeout: int = 600, distro: str = "") -> subprocess.CompletedProcess:
+def run_wsl(
+    bash_cmd: str, *, timeout: int = 600, distro: str = "", user: str = ""
+) -> subprocess.CompletedProcess:
     """在 WSL 默认（或指定）发行版执行 bash -lc。"""
     exe = wsl_exe()
     prefix = [exe]
     if distro:
         prefix += ["-d", distro]
+    if user:
+        prefix += ["-u", user]
     prefix += ["-e", "bash", "-lc", bash_cmd]
-    return subprocess.run(
-        prefix,
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=timeout,
+    flags = 0
+    if os.name == "nt" and hasattr(subprocess, "CREATE_NO_WINDOW"):
+        flags = subprocess.CREATE_NO_WINDOW
+    r = subprocess.run(prefix, capture_output=True, timeout=timeout, creationflags=flags)
+    return subprocess.CompletedProcess(
+        r.args,
+        r.returncode,
+        decode_wsl_bytes(r.stdout),
+        decode_wsl_bytes(r.stderr),
     )
 
 
@@ -158,9 +272,25 @@ class LocalDftbRunner:
                 r = run_local(script, timeout=30)
             out = (r.stdout or "") + (r.stderr or "")
             ok = r.returncode == 0 and "dftb" in out.lower()
-            return {"status": "ok" if ok else "error", "message": out[-800:], "wsl": self._wsl}
+            if ok:
+                first = next((ln.strip() for ln in out.splitlines() if ln.strip()), "")
+                return {
+                    "status": "ok",
+                    "message": (first[:160] if first else "已安装并可探测"),
+                    "wsl": self._wsl,
+                    "detail": out[-800:],
+                }
+            return {
+                "status": "error",
+                "message": "尚未安装 DFTB+",
+                "wsl": self._wsl,
+                "detail": out[-800:],
+            }
         except Exception as e:
-            return {"status": "error", "message": str(e)[:300], "wsl": self._wsl}
+            err = str(e)[:300]
+            if _looks_mojibake(err):
+                err = "未能探测 DFTB+"
+            return {"status": "error", "message": err, "wsl": self._wsl}
 
     def submit_job(self, files: dict[str, str], *, job_id: str = "", np: int = 1) -> dict[str, Any]:
         job_id = job_id or f"edu_{uuid.uuid4().hex[:10]}"

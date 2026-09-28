@@ -1,6 +1,6 @@
 {
   "name": "dftb-neu",
-  "version": "0.3.5",
+  "version": "0.4.5",
   "description": "DFTB classroom training desktop shell",
   "main": "main.js",
   "author": "dftb-neu",

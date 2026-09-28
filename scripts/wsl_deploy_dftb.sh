@@ -11,6 +11,27 @@ mkdir -p "$BIN_DIR" "$CMATS_ROOT/envs" "$CMATS_ROOT/tmp" "$SK_ROOT" "$JOB_ROOT"
 echo "DEPLOY_ROOT=$CMATS_ROOT"
 
 MM="$BIN_DIR/micromamba"
+CONDA_MIRRORS=(
+  "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge"
+  "https://mirrors.ustc.edu.cn/anaconda/cloud/conda-forge"
+)
+fetch_url() {
+  local dest="$1"
+  shift
+  local url
+  rm -f "$dest"
+  for url in "$@"; do
+    echo "FETCH=$url"
+    if command -v curl >/dev/null 2>&1; then
+      curl -fL --retry 2 --connect-timeout 15 --max-time 180 -o "$dest" "$url" && [ -s "$dest" ] && return 0
+    else
+      wget -T 30 -O "$dest" "$url" && [ -s "$dest" ] && return 0
+    fi
+    rm -f "$dest"
+  done
+  return 1
+}
+
 if [ ! -x "$MM" ]; then
   ARCH=$(uname -m)
   case "$ARCH" in
@@ -18,15 +39,19 @@ if [ ! -x "$MM" ]; then
     aarch64|arm64) MM_ARCH=linux-aarch64 ;;
     *) echo "UNSUPPORTED_ARCH=$ARCH"; exit 2 ;;
   esac
-  URL="https://micro.mamba.pm/api/micromamba/${MM_ARCH}/latest"
   TMP="$CMATS_ROOT/tmp/micromamba.tar.bz2"
-  if command -v curl >/dev/null 2>&1; then
-    curl -fsSL "$URL" -o "$TMP"
-  else
-    wget -qO "$TMP" "$URL"
+  MM_OK=0
+  for ver in "2.9.0-0" "2.8.4-0" "2.3.3-0"; do
+    fetch_url "$TMP" \
+      "https://mirrors.tuna.tsinghua.edu.cn/anaconda/cloud/conda-forge/${MM_ARCH}/micromamba-${ver}.tar.bz2" \
+      "https://mirrors.ustc.edu.cn/anaconda/cloud/conda-forge/${MM_ARCH}/micromamba-${ver}.tar.bz2" \
+      && MM_OK=1 && break
+  done
+  if [ "$MM_OK" != "1" ]; then
+    echo "MICROMAMBA_DOWNLOAD_FAIL"
+    exit 3
   fi
   mkdir -p "$CMATS_ROOT/tmp/mmextract"
-  # 精简 Ubuntu/WSL 往往没有 bzip2；优先用系统 tar，失败则用 python3 解压
   if tar -xjf "$TMP" -C "$CMATS_ROOT/tmp/mmextract" bin/micromamba 2>/dev/null; then
     :
   elif command -v python3 >/dev/null 2>&1; then
@@ -71,12 +96,20 @@ else
   if [ -e "$ENV_DIR" ]; then
     mv "$ENV_DIR" "${ENV_DIR}_broken_$$" 2>/dev/null || rm -rf "$ENV_DIR"
   fi
-  if [ "$GLIBC_OK_FLAG" = "1" ]; then
-    "$MM" create -y -p "$ENV_DIR" -c conda-forge 'dftbplus=*=nompi_*' dftbplus-tools || \
-    "$MM" create -y -p "$ENV_DIR" -c conda-forge dftbplus dftbplus-tools
-  else
-    "$MM" create -y -p "$ENV_DIR" -c conda-forge 'dftbplus=21.2' || \
-    "$MM" create -y -p "$ENV_DIR" -c conda-forge 'dftbplus=22.2'
+  created=0
+  for ch in "${CONDA_MIRRORS[@]}"; do
+    echo "CONDA_CHANNEL=$ch"
+    if [ "$GLIBC_OK_FLAG" = "1" ]; then
+      "$MM" create -y -p "$ENV_DIR" --override-channels -c "$ch" 'dftbplus=*=nompi_*' dftbplus-tools && created=1 && break
+      "$MM" create -y -p "$ENV_DIR" --override-channels -c "$ch" dftbplus dftbplus-tools && created=1 && break
+    else
+      "$MM" create -y -p "$ENV_DIR" --override-channels -c "$ch" 'dftbplus=21.2' && created=1 && break
+      "$MM" create -y -p "$ENV_DIR" --override-channels -c "$ch" 'dftbplus=22.2' && created=1 && break
+    fi
+  done
+  if [ "$created" != "1" ]; then
+    echo "ENV_CREATE_FAIL"
+    exit 4
   fi
   echo "ENV_CREATED"
 fi
@@ -89,9 +122,11 @@ download_sk() {
     return 0
   fi
   mkdir -p "$dest"
-  local url="https://github.com/dftbparams/${set}/archive/refs/heads/main.tar.gz"
   local tar="$CMATS_ROOT/tmp/${set}.tar.gz"
-  curl -fsSL "$url" -o "$tar" || wget -qO "$tar" "$url" || return 1
+  fetch_url "$tar" \
+    "https://ghfast.top/https://github.com/dftbparams/${set}/archive/refs/heads/main.tar.gz" \
+    "https://gitclone.com/github.com/dftbparams/${set}/archive/refs/heads/main.tar.gz" \
+    || return 1
   mkdir -p "$CMATS_ROOT/tmp/sk_$set"
   tar -xzf "$tar" -C "$CMATS_ROOT/tmp/sk_$set"
   find "$CMATS_ROOT/tmp/sk_$set" -name '*.skf' -exec cp -f {} "$dest/" \;

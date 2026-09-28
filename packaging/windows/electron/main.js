@@ -209,7 +209,7 @@ function ensureWslElevated() {
     }
     // Start-Process -Verb RunAs：用户确认 UAC 后由系统执行 wsl --install
     const ps =
-      "Start-Process -FilePath wsl.exe -ArgumentList '--install','-d','Ubuntu' -Verb RunAs";
+      "Start-Process -FilePath wsl.exe -ArgumentList '--install','--no-distribution' -Verb RunAs";
     const child = spawn(
       "powershell.exe",
       ["-NoProfile", "-ExecutionPolicy", "Bypass", "-Command", ps],
@@ -224,7 +224,7 @@ function ensureWslElevated() {
         resolve({
           ok: true,
           message:
-            "已请求启用 WSL2。请在管理员确认框中允许；安装完成后若系统要求重启，重启后再点一次「部署到本机」。",
+            "已请求启用 WSL。若管理员确认框已允许，软件会继续探测；只有系统明确要求重启时才需要先重启。",
         });
       } else {
         resolve({

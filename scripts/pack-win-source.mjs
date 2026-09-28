@@ -1,6 +1,5 @@
 /**
- * 打 Windows 源码包（可重新打包 Setup，不含 node_modules / pydeps / release）。
- *   node scripts/pack-win-source.mjs
+ * �?Windows 源码包（可重新打�?Setup，不�?node_modules / pydeps / release）�? *   node scripts/pack-win-source.mjs
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -79,7 +78,7 @@ function copyTree(src, dest) {
     const to = path.join(dest, ent.name);
     if (ent.isDirectory()) {
       if (shouldSkipDir(ent.name)) continue;
-      // packaging/windows/electron/dist 等已由 SKIP_DIR_NAMES 覆盖
+      // packaging/windows/electron/dist 等已�?SKIP_DIR_NAMES 覆盖
       copyTree(from, to);
       continue;
     }
@@ -90,31 +89,26 @@ function copyTree(src, dest) {
 }
 
 function writeReadme(destRoot) {
-  const text = `DFTB-NEU Windows 源码包 ${version}
+  const text = `DFTB-NEU Windows 源码�?${version}
 ================================
 
-内容：仓库源码（apps / engines / templates / scripts / packaging 等），
-不含 node_modules、内置 Python、pydeps、已打好的 Setup。
-
-在 Windows 上重新打 Setup：
-  1. 安装 Node.js LTS、Git（可选）
+内容：仓库源码（apps / engines / templates / scripts / packaging 等）�?不含 node_modules、内�?Python、pydeps、已打好�?Setup�?
+�?Windows 上重新打 Setup�?  1. 安装 Node.js LTS、Git（可选）
   2. cd packaging\\windows
   3. npm install --registry=https://registry.npmmirror.com
-  4. 首次需准备内置 Python 与 pydeps（去掉 SKIP_*）：
+  4. 首次需准备内置 Python �?pydeps（去�?SKIP_*）：
        node scripts\\pack-win.mjs
-     若本机已有 packaging\\windows\\backend\\python-win 与 pydeps，可：
-       set SKIP_WIN_PYTHON=1
+     若本机已�?packaging\\windows\\backend\\python-win �?pydeps，可�?       set SKIP_WIN_PYTHON=1
        set SKIP_PYDEPS=1
        node scripts\\pack-win.mjs
-  5. 产物在 packaging\\windows\\release\\DFTB_Neu_Setup_${version}.exe
+  5. 产物�?packaging\\windows\\release\\DFTB_Neu_Setup_${version}.exe
 
-学生使用请发 Setup，不要发本源码包。
-`;
+学生使用请发 Setup，不要发本源码包�?`;
   fs.writeFileSync(path.join(destRoot, "源码说明.txt"), text, "utf8");
 }
 
-console.log("staging →", staging);
-rmrf(staging);
+console.log("staging �?, staging);
+try { rmrf(staging); } catch (e) { console.warn("soft cleanup staging", e && e.message); }
 const rootOut = path.join(staging, outName);
 fs.mkdirSync(rootOut, { recursive: true });
 
@@ -143,7 +137,7 @@ for (const name of topKeep) {
 }
 writeReadme(rootOut);
 
-// 用内置 python 打 zip（路径友好）
+// 用内�?python �?zip（路径友好）
 const py =
   process.env.DFTB_NEU_PYTHON ||
   path.join(repoRoot, "packaging", "windows", "backend", "python-win", "python.exe");
@@ -167,12 +161,12 @@ fs.writeFileSync(zipHelper, zipPy, "utf8");
 const pyBin = fs.existsSync(py) ? py : "python";
 for (const dest of [zipPath, releaseZip]) {
   rmrf(dest);
-  console.log("zip →", dest);
+  console.log("zip �?, dest);
   const r = spawnSync(pyBin, [zipHelper, rootOut, dest], { stdio: "inherit" });
   if (r.status !== 0) process.exit(r.status || 1);
 }
 
-rmrf(staging);
+try { rmrf(staging); } catch (e) { console.warn("soft cleanup staging", e && e.message); }
 console.log("DONE");
 console.log("  Desktop:", zipPath);
 console.log("  Release:", releaseZip);

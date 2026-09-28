@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable
+from typing import Iterable, Optional
 
 # 电子结构相关（可展示 Fermi / 能带 / DOS / 带隙）
 BAND_KINDS = frozenset({"dftb_band", "dftb_dos", "dftb_defect", "dftb_boundary"})
@@ -41,8 +41,8 @@ def shows_kpath(kind: str = "") -> bool:
     return normalize_kind(kind) in BAND_KINDS
 
 
-def shows_opt_metrics(kind: str = "") -> bool:
-    return normalize_kind(kind) in OPT_KINDS
+def shows_opt_metrics(kind: str = "", *, pre_relax: bool = False) -> bool:
+    return normalize_kind(kind) in OPT_KINDS or bool(pre_relax)
 
 
 def shows_excitations(kind: str = "") -> bool:
@@ -57,15 +57,21 @@ def shows_md_metrics(kind: str = "") -> bool:
     return normalize_kind(kind) in MD_KINDS
 
 
-def shows_structure_compare(kind: str = "") -> bool:
-    return normalize_kind(kind) in OPT_KINDS
+def shows_structure_compare(
+    kind: str = "",
+    *,
+    pre_relax: bool = False,
+    stages: Optional[Iterable[str]] = None,
+) -> bool:
+    if normalize_kind(kind) in OPT_KINDS or bool(pre_relax):
+        return True
+    stage_list = [str(s) for s in (stages or [])]
+    return "opt" in stage_list
 
 
 def want_plot_opt_energy(kind: str = "", *, has_opt_trace: bool = False) -> bool:
-    k = normalize_kind(kind)
-    if k:
-        return k in OPT_KINDS and has_opt_trace
-    return has_opt_trace
+    del kind
+    return bool(has_opt_trace)
 
 
 def want_plot_bands(

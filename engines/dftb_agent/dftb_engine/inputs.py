@@ -102,9 +102,11 @@ def build_inputs_for_kind(
     p["_sk_coverage"] = sk_report
     prompt = str(p.get("prompt") or "")
     want_dos = bool(p.get("want_dos")) or kind == "dftb_dos"
-    want_band = kind in ("dftb_band", "dftb_defect") or (
-        want_dos and ("能带" in prompt or "band" in prompt.lower())
+    prompt_l = prompt.lower()
+    gap_in_prompt = any(k in prompt for k in ("能带", "带隙", "能隙", "禁带")) or any(
+        k in prompt_l for k in ("band", "bandgap", "band-gap", "band gap")
     )
+    want_band = kind in ("dftb_band", "dftb_defect") or (want_dos and gap_in_prompt)
     # 缺陷超胞：SCC/优化用适中网格（超胞已放大，不必 12×12）
     if kind == "dftb_defect" and not cluster:
         p.setdefault("dimensionality", "2d")
@@ -188,20 +190,33 @@ def build_inputs_for_kind(
             p["_band_meta"]["want_dos"] = True
             p["_band_meta"]["dos_note"] = "DOS 来自均匀 k 网格（非能带路径近似）"
 
-    # 预优化：周期电子结构；振动/Casida 分子也默认短优化
-    pre_relax_kinds_periodic = ("dftb_band", "dftb_dos", "dftb_defect")
-    pre_relax_kinds_any = ("dftb_vib", "dftb_td")
+    # 预优化：主 HSD 本身已是优化的 kind 不再套一层
+    pre_relax_kinds = (
+        "dftb_band",
+        "dftb_dos",
+        "dftb_defect",
+        "dftb_vib",
+        "dftb_td",
+        "dftb_md",
+        "dftb_md_anneal",
+        "dftb_edyn",
+        "dftb_ehrenfest",
+        "dftb_phonon",
+        "dftb_transport",
+        "dftb_reks",
+    )
+    already_opt = ("dftb_opt", "dftb_xtb", "dftb_solv", "dftb_td_relax", "dftb_barrier")
     want_pre = bool(p.get("pre_relax"))
-    if kind in pre_relax_kinds_any and "pre_relax" not in p:
+    if kind in pre_relax_kinds and "pre_relax" not in p:
         want_pre = True
-    if kind in pre_relax_kinds_periodic and "pre_relax" not in p:
-        want_pre = True
-    if kind in pre_relax_kinds_periodic and cluster:
+    if kind in ("dftb_band", "dftb_dos", "dftb_defect") and cluster and "pre_relax" not in p:
         want_pre = False
-    if want_pre and kind in pre_relax_kinds_periodic + pre_relax_kinds_any:
+    if kind in already_opt:
+        want_pre = False
+    if want_pre and kind in pre_relax_kinds:
         p_opt = dict(p)
         p_opt.pop("ham_kpoints_block", None)  # 优化用均匀 k 网格，不用 Klines
-        if kind in pre_relax_kinds_any:
+        if kind in ("dftb_vib", "dftb_td"):
             p_opt.setdefault("max_steps", int(p.get("max_steps") or 50))
         else:
             p_opt.setdefault("max_steps", int(p.get("max_steps") or 80))

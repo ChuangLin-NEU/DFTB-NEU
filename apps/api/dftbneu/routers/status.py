@@ -20,7 +20,7 @@ async def status():
     license_check = await lic.check_session(allow_offline_grace=True)
     return {
         "service": "dftb-neu",
-        "version": "0.1.0",
+        "version": "0.4.5",
         "settings": settings_pub,
         "license": lic.public_license_status(),
         "license_check": license_check,
